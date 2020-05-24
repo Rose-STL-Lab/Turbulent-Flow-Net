@@ -12,6 +12,6 @@ While deep learning has shown tremendous success in a wide range of domains, it 
 s[![](https://img.youtube.com/vi/80U8lcIZYe4/hqdefault.jpg)](https://www.youtube.com/watch?v=80U8lcIZYe4)
 
 ### Ablation Study
-#####(includes the predictions of TF-net, and the outputs of each small U-net while the other two encoders
+(The predictions from TF-net, and the outputs of each small U-net while the other two encoders
 are zeroed out.)
 s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube.com/watch?v=ysdrMUfdhe0)
