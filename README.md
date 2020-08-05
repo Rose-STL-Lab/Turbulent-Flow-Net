@@ -16,3 +16,9 @@ s[![](https://img.youtube.com/vi/80U8lcIZYe4/hqdefault.jpg)](https://www.youtube
 are zeroed out.)
 
 s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube.com/watch?v=ysdrMUfdhe0)
+
+### Description
+1. Baselines: Six baseline modules included in the paper.
+2. TF-Net: 
+3. Evaluation:
+4. Videos: 
