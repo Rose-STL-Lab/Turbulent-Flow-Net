@@ -1,5 +1,5 @@
 ## Towards Physics-informed Deep Learning for Turbulent Flow Prediction
-### Paper: 
+## Paper: 
 [Towards Physics-informed Deep Learning for Turbulent Flow Prediction](https://arxiv.org/abs/1911.08655)
 
 ### Abstract:
@@ -17,8 +17,15 @@ are zeroed out.)
 
 s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube.com/watch?v=ysdrMUfdhe0)
 
-### Description
+## Description
 1. Baselines: Six baseline modules included in the paper.
 2. TF-Net: 
+   1. model.py: TF-net pytorch implementation.
+   2. penalty.py: a few regularizers we have tried.
+   3. train.py: data loaders, train epoch, validation epoch, test epoch functions.
+   4. run_model.py: train tf-net,
+   ```
+   python run_model.py
+   ```
 3. Evaluation:
 4. Videos: 
