@@ -1,4 +1,4 @@
-## Towards Physics-informed Deep Learning for Turbulent Flow Prediction
+# Towards Physics-informed Deep Learning for Turbulent Flow Prediction
 ## Paper: 
 [Towards Physics-informed Deep Learning for Turbulent Flow Prediction](https://arxiv.org/abs/1911.08655)
 
@@ -23,9 +23,11 @@ s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube
    1. model.py: TF-net pytorch implementation.
    2. penalty.py: a few regularizers we have tried.
    3. train.py: data loaders, train epoch, validation epoch, test epoch functions.
-   4. run_model.py: train tf-net,
+   4. run_model.py: train TF-Net
    ```
    python run_model.py
    ```
 3. Evaluation:
-4. Videos: 
+   1. Evaluation.ipynb: contains the functions of four evaluation metrics.
+   2. radialProfile.py: a helper function for calculating energy spectrum.
+4. Videos: Videos of velocity u, v predictions and ablation study
