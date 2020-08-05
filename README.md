@@ -18,8 +18,8 @@ are zeroed out.)
 s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube.com/watch?v=ysdrMUfdhe0)
 
 ## Description
-1. Baselines: Six baseline modules included in the paper.
-2. TF-Net: 
+1. Baselines/: Six baseline modules included in the paper.
+2. TF-Net/: 
    1. model.py: TF-net pytorch implementation.
    2. penalty.py: a few regularizers we have tried.
    3. train.py: data loaders, train epoch, validation epoch, test epoch functions.
@@ -27,7 +27,7 @@ s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube
    ```
    python run_model.py
    ```
-3. Evaluation:
+3. Evaluation/:
    1. Evaluation.ipynb: contains the functions of four evaluation metrics.
    2. radialProfile.py: a helper function for calculating energy spectrum.
-4. Videos: Videos of velocity u, v predictions and ablation study
+4. Videos/: Videos of velocity u, v predictions and ablation study.
