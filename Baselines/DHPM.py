@@ -1,3 +1,4 @@
+# Deep Hidden Physics Model For Navier-Stokes Equation
 import torch
 import torch.nn as nn
 import torch.optim as optim
