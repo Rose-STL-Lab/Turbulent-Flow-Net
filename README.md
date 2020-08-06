@@ -23,7 +23,7 @@ s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube
    1. model.py: TF-net pytorch implementation.
    2. penalty.py: a few regularizers we have tried.
    3. train.py: data loaders, train epoch, validation epoch, test epoch functions.
-   4. run_model.py: train TF-Net
+   4. run_model.py: Scripts to train TF-Net
    ```
    python run_model.py
    ```
