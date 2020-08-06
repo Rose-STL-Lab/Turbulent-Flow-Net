@@ -31,3 +31,18 @@ s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube
    1. Evaluation.ipynb: contains the functions of four evaluation metrics.
    2. radialProfile.py: a helper function for calculating energy spectrum.
 4. Videos/: Videos of velocity u, v predictions and ablation study.
+
+## Requirement 
+python 3.6
+pytorch 1.0
+matplotlib
+
+## Cite
+```
+@article{Wang2020TF,
+   title={Towards Physics-informed Deep Learning for Turbulent Flow Prediction},
+   author={Rui Wang, Karthik Kashinath, Mustafa Mustafa, Adrian Albert, Rose Yu},
+   journal={arXiv preprint arXiv:1911.08655},
+   Year = {2019}
+}	
+```
