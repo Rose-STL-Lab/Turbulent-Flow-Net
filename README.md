@@ -8,13 +8,9 @@ While deep learning has shown tremendous success in a wide range of domains, it 
 ### Model Architecture
 ![Alt text](model.png?raw=true "Title")
 
-### Velocity U predictions by TF-net and three best baselines.
-![](Videos/U_prediction.gif| width=30) ![](Videos/V_prediction.gif)
+### Velocity U & V Prediction and Ablation Study
+![](Videos/all.gif)
 
-### Ablation Study
-(The predictions from TF-net, and the outputs of each small U-net while the other two encoders
-are zeroed out.)
-![](Videos/Ablation_Study.gif)
 
 ## Description
 1. Baselines/: Six baseline modules included in the paper.
