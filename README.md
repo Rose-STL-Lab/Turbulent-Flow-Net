@@ -9,7 +9,7 @@ While deep learning has shown tremendous success in a wide range of domains, it 
 ![Alt text](model.png?raw=true "Title")
 
 ### Velocity U predictions by TF-net and three best baselines.
-![](Videos/U_prediction.gif) ![](Videos/V_prediction.gif)
+![](Videos/U_prediction.gif) | ![](Videos/V_prediction.gif)
 
 ### Ablation Study
 (The predictions from TF-net, and the outputs of each small U-net while the other two encoders
