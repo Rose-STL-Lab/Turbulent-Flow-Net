@@ -14,8 +14,7 @@ s[![](https://img.youtube.com/vi/80U8lcIZYe4/hqdefault.jpg)](https://www.youtube
 #### Ablation Study
 (The predictions from TF-net, and the outputs of each small U-net while the other two encoders
 are zeroed out.)
-
-s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube.com/watch?v=ysdrMUfdhe0)
+![](Ablation_Study.gif)
 
 ## Description
 1. Baselines/: Six baseline modules included in the paper.
@@ -36,7 +35,7 @@ s[![](https://img.youtube.com/vi/ysdrMUfdhe0/hqdefault.jpg)](https://www.youtube
 python 3.6
 pytorch 1.0
 matplotlib
-![](Ablation_Study.gif)
+
 ## Cite
 ```
 @article{Wang2020TF,
