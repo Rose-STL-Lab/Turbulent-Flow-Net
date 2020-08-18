@@ -38,7 +38,7 @@ While deep learning has shown tremendous success in a wide range of domains, it 
 @article{Wang2020TF,
    title={Towards Physics-informed Deep Learning for Turbulent Flow Prediction},
    author={Rui Wang, Karthik Kashinath, Mustafa Mustafa, Adrian Albert, Rose Yu},
-   journal={arXiv preprint arXiv:1911.08655},
-   Year = {2019}
+   journal={Proceedings of the 28th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2020},
+   Year = {2020}
 }	
 ```
