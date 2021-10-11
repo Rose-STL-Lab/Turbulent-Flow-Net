@@ -31,7 +31,7 @@ class Dataset(data.Dataset):
     def __getitem__(self, index):
         ID = self.list_IDs[index]
         if self.stack_x:
-            x = torch.load(self.direc + str(ID) + ".pt")[(self.mid-self.input_length):self.mid].reshape(-1, y.shape[-2], y.shape[-`])
+            x = torch.load(self.direc + str(ID) + ".pt")[(self.mid-self.input_length):self.mid].reshape(-1, y.shape[-2], y.shape[-1])
         else:
             x = torch.load(self.direc + str(ID) + ".pt")[(self.mid-self.input_length):self.mid]
         y = torch.load(self.direc + str(ID) + ".pt")[self.mid:(self.mid+self.output_length)]
