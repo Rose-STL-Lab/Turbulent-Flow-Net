@@ -41,7 +41,7 @@ model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = 
             dropout_rate = dropout_rate, time_range = time_range).to(device)
 model = nn.DataParallel(model)
 
-train_set = Dataset(valid_indices, input_length + time_range - 1, 40, output_length, train_direc, True)
+train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, train_direc, True)
 valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, test_direc, True)
 train_loader = data.DataLoader(train_set, batch_size = batch_size, shuffle = True, num_workers = 8)
 valid_loader = data.DataLoader(valid_set, batch_size = batch_size, shuffle = False, num_workers = 8)
