@@ -1,0 +1,6 @@
+results/
+rbc_data.pt
+nohup.out
+Evaluation/__pycache__/
+TF-net/__pycache__/
+run*.sh
