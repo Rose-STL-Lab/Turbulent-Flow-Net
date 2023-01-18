@@ -71,7 +71,7 @@ def parse_arguments():
                         default=100)
     parser.add_argument("--mide",
                         type=float,
-                        default=0.1)
+                        default=None)
     parser.add_argument("--slope",
                         type=int,
                         default=300) # 300
@@ -81,10 +81,11 @@ def parse_arguments():
     parser.add_argument("--d_ids",
                         nargs='+',
                         type=int,
-                        default=[5])
+                        default=[2])
     parser.add_argument("--bnorm", action='store_true', default=False)
     parser.add_argument("--no_weight", action='store_true', default=False)
     parser.add_argument("--only_val", action='store_true', default=False)
+    parser.add_argument("--use_time", help="use time as well for (mse - mide) transformation", action='store_true', default=False)
     return parser.parse_args()
                         
 
@@ -150,7 +151,32 @@ coef = args.coef
 coef2 = args.coef2
 print("configs:",[min_mse,time_range,output_length,input_length,learning_rate,dropout_rate,kernel_size,batch_size,coef,coef2,step_size,args])
 
-optimizer = torch.optim.Adam(model.parameters(), learning_rate, betas = (0.9, 0.999), weight_decay = 4e-4)
+if args.mide is None:
+    class Mide_pred(nn.Module):
+        def __init__(self, ):
+            super(Mide_pred, self).__init__()
+            if args.use_time:
+                m_pred = nn.Linear(2,1)
+            else:
+                m_pred = nn.Linear(1, 1)
+            m_pred.weight = nn.Parameter(torch.ones_like(m_pred.weight))
+            if not args.use_time:
+                m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
+            else:
+                m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
+            self.m_pred = m_pred
+
+        def forward(self, x):
+            return self.m_pred(x)
+
+    m_pred = Mide_pred().to(device)
+else:
+    m_pred = None
+
+optimizer = torch.optim.Adam([
+                                {'params': model.parameters()},
+                                {'params': ([] if m_pred is None else m_pred.parameters()), 'lr':1e-4, 'weight_decay':0.0}
+                            ], learning_rate, betas = (0.9, 0.999), weight_decay = 4e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = step_size, gamma = 0.9)
 
 train_mse = []
@@ -158,11 +184,12 @@ train_reg = []
 valid_mse = []
 val_reg = []
 test_mse = []
+
 for i in range(args.epoch):
     start = time.time()
     scheduler.step()
     model.train()
-    train_mse_rst,train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
+    train_mse_rst,train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
     train_mse.append(train_mse_rst)
     train_reg.append(train_reg_rst)
     model.eval()
@@ -179,6 +206,8 @@ for i in range(args.epoch):
     ic_print(i, train_mse[-1],train_reg[-1], valid_mse[-1],val_reg[-1], round((end-start)/60,5))
 ic_print(time_range, min_mse)
 
+ic_print(m_pred.m_pred.weight)
+ic_print(m_pred.m_pred.bias)
 
 batch_size=21
 if len(args.d_ids) >= 7:

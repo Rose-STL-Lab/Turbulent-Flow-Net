@@ -46,11 +46,12 @@ class Dataset(data.Dataset):
         
         return x.float(), y.float()
     
-def train_epoch(args, train_loader, model, optimizer, loss_function, coef = 0, regularizer = None, coef2=1.0,cur_epoch=-1,barrier=1e2,mide=None,slope=None, 
+def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0,cur_epoch=-1,barrier=1e2,mide=None,slope=None, 
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     train_mse = []
     train_reg = []
     training_data = tqdm(train_loader)
+
     for _,(xx, yy) in enumerate(training_data):
         loss = 0
         batch_reg = 0
@@ -63,7 +64,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, coef = 0, r
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
     
-        for y in yy:
+        for cur_t, y in enumerate(yy):
             #print("xx:",xx.shape,"yy:",yy.shape,y.shape)
             im = model(xx)
             xx = torch.cat([xx[:, 2:], im], 1)
@@ -85,7 +86,14 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, coef = 0, r
                 #lya_reg = torch.mean(dV_dt) # = dV_dt
                 # loss += coef2*lya_reg
                 dV_dt = lya_val - prev_lya # (Batch, )
-                lya_reg,log_c,relu_c,log_v,relu_v = log_barrier(args,dV_dt,coef2,barrier,mide,slope,lya_val)
+                if m_pred is not None:
+                    temp = lya_val.reshape((-1,1))
+                    if args.use_time:
+                        temp = torch.hstack((temp, cur_t*0.1*torch.ones_like(temp)))
+                    cur_pred_error = m_pred(temp).reshape((-1,))   # Send mide as zero, and update cur_pred_error
+                    lya_reg,log_c,relu_c,log_v,relu_v = log_barrier(args,dV_dt,coef2,barrier,0.0,slope, cur_pred_error)
+                else:
+                    lya_reg,log_c,relu_c,log_v,relu_v = log_barrier(args,dV_dt,coef2,barrier,mide,slope, lya_val)
                 if lya_reg != None:
                     loss += lya_reg
                     batch_reg += lya_reg.item()
@@ -101,7 +109,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, coef = 0, r
         loss.backward()
         optimizer.step()
         if coef2 != 0:
-            training_data.set_postfix(cur_epoch=cur_epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v)
+            training_data.set_postfix(cur_epoch=cur_epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v, bias_data=m_pred.m_pred.bias.data)
     train_mse = round(np.sqrt(np.mean(train_mse)),5)
     train_reg = round(np.mean(train_reg),5)
     return train_mse,train_reg
@@ -214,7 +222,7 @@ def log_barrier(args, dV_dt,coef2,t=1,mide=None,slope=None,cur_pred_mse=None): #
     dV_dt = dV_dt
     if not args.no_weight and slope is not None:
         assert dV_dt.shape[0] == cur_pred_mse.shape[0], "batch not match"
-        weights = coef2 / (1+np.e**(-slope*(cur_pred_mse.detach().cpu().numpy()-mide)))
+        weights = coef2 / (1+torch.e**(-slope*(cur_pred_mse-mide)))
     else:
         weights = coef2 * np.array([1 for i in range(len(dV_dt))])
     idx = 0
