@@ -74,7 +74,11 @@ def parse_arguments():
                         default=None)
     parser.add_argument("--slope",
                         type=int,
-                        default=300) # 300
+                        default=None) # 300
+    parser.add_argument("--slope_init",
+                        help="if slope is None, i.e. slope is learnt, init it with this value",
+                        type=int,
+                        default=7) # 300
     parser.add_argument("--barrier",
                         type=float,
                         default=1e-3)
@@ -151,7 +155,8 @@ coef = args.coef
 coef2 = args.coef2
 print("configs:",[min_mse,time_range,output_length,input_length,learning_rate,dropout_rate,kernel_size,batch_size,coef,coef2,step_size,args])
 
-if args.mide is None:
+if args.mide is None or args.slope is None:
+    assert args.mide is None
     class Mide_pred(nn.Module):
         def __init__(self, ):
             super(Mide_pred, self).__init__()
@@ -165,6 +170,11 @@ if args.mide is None:
             else:
                 m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
             self.m_pred = m_pred
+
+            if args.slope is None:
+                self.slope = nn.Parameter(args.slope_init*torch.ones(1))
+            else:
+                self.slope = None
 
         def forward(self, x):
             return self.m_pred(x)
@@ -204,10 +214,8 @@ for i in range(args.epoch):
     #if (len(train_mse) > 50 and np.mean(valid_mse[-5:]) >= np.mean(valid_mse[-10:-5])):
     #        break
     ic_print(i, train_mse[-1],train_reg[-1], valid_mse[-1],val_reg[-1], round((end-start)/60,5))
+    ic_print(m_pred.m_pred.weight, m_pred.m_pred.bias, m_pred.slope)
 ic_print(time_range, min_mse)
-
-ic_print(m_pred.m_pred.weight)
-ic_print(m_pred.m_pred.bias)
 
 batch_size=21
 if len(args.d_ids) >= 7:

@@ -48,6 +48,8 @@ class Dataset(data.Dataset):
     
 def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0,cur_epoch=-1,barrier=1e2,mide=None,slope=None, 
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
+    if slope is None:
+        slope = m_pred.slope
     train_mse = []
     train_reg = []
     training_data = tqdm(train_loader)
