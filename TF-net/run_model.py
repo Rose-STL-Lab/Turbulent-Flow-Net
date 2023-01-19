@@ -78,7 +78,7 @@ def parse_arguments():
     parser.add_argument("--slope_init",
                         help="if slope is None, i.e. slope is learnt, init it with this value",
                         type=int,
-                        default=7) # 300
+                        default=50) # 300
     parser.add_argument("--barrier",
                         type=float,
                         default=1e-3)
@@ -90,6 +90,12 @@ def parse_arguments():
     parser.add_argument("--no_weight", action='store_true', default=False)
     parser.add_argument("--only_val", action='store_true', default=False)
     parser.add_argument("--use_time", help="use time as well for (mse - mide) transformation", action='store_true', default=False)
+    parser.add_argument("--time_factor",
+                        type=float,
+                        default=0.01)
+    parser.add_argument("--desc",
+                        type=str,
+                        default="")
     return parser.parse_args()
                         
 
@@ -165,10 +171,8 @@ if args.mide is None or args.slope is None:
             else:
                 m_pred = nn.Linear(1, 1)
             m_pred.weight = nn.Parameter(torch.ones_like(m_pred.weight))
-            if not args.use_time:
-                m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
-            else:
-                m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
+            m_pred.weight.data[:,1] = 0.0
+            m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
             self.m_pred = m_pred
 
             if args.slope is None:

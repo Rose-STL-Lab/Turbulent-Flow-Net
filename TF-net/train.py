@@ -91,7 +91,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
                 if m_pred is not None:
                     temp = lya_val.reshape((-1,1))
                     if args.use_time:
-                        temp = torch.hstack((temp, cur_t*0.1*torch.ones_like(temp)))
+                        temp = torch.hstack((temp, cur_t*args.time_factor*torch.ones_like(temp)))
                     cur_pred_error = m_pred(temp).reshape((-1,))   # Send mide as zero, and update cur_pred_error
                     lya_reg,log_c,relu_c,log_v,relu_v = log_barrier(args,dV_dt,coef2,barrier,0.0,slope, cur_pred_error)
                 else:
