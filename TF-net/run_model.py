@@ -166,12 +166,10 @@ if args.mide is None or args.slope is None:
     class Mide_pred(nn.Module):
         def __init__(self, ):
             super(Mide_pred, self).__init__()
-            if args.use_time:
-                m_pred = nn.Linear(2,1)
-            else:
-                m_pred = nn.Linear(1, 1)
+            m_pred = nn.Linear(2 if args.use_time else 1,1)
             m_pred.weight = nn.Parameter(torch.ones_like(m_pred.weight))
-            m_pred.weight.data[:,1] = 0.0
+            if args.use_time:
+                m_pred.weight.data[:,1] = 0.0
             m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
             self.m_pred = m_pred
 

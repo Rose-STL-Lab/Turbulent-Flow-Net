@@ -9,9 +9,9 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "TF-net/run_model.py",
             "console": "integratedTerminal",
-            "args": ["--use_time", "--d_ids", "0"],
+            "args": ["--slope_init", "100", "--d_ids", "0"],
             "justMyCode": true,
             "env": {
                 "CUBLAS_WORKSPACE_CONFIG":":4096:8"
