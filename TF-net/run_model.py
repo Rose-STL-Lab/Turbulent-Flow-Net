@@ -78,7 +78,7 @@ def parse_arguments():
     parser.add_argument("--slope_init",
                         help="if slope is None, i.e. slope is learnt, init it with this value",
                         type=int,
-                        default=50) # 300
+                        default=300) # 300
     parser.add_argument("--barrier",
                         type=float,
                         default=1e-3)
@@ -96,19 +96,25 @@ def parse_arguments():
     parser.add_argument("--desc",
                         type=str,
                         default="")
+    parser.add_argument("--data",
+                        type=str,
+                        default="rbc_data.pt")
     return parser.parse_args()
                         
 
 
-def preprocess(test_mode=False):
-    data = torch.load("rbc_data.pt")
+def preprocess(args, permute = False, compress = True, test_mode=False):
+    data = torch.load(args.data)
+    if permute:
+        data = torch.permute(data, (0, 3, 1, 2))
 
     # standardization
     std = torch.std(data)
     avg = torch.mean(data)
     print(std,avg)
     data = (data - avg)/std
-    data = data[:,:,::4,::4]
+    if compress:
+        data = data[:,:,::4,::4]
 
     # divide each rectangular snapshot into 7 subregions
     # data_prep shape: num_subregions * time * channels * w * h
@@ -127,7 +133,15 @@ torch.cuda.manual_seed(args.seed)
 np.random.seed(args.seed)
 ic_print(args.seed)
 
-data_prep = preprocess()
+
+if args.data == "rbc_data.pt":
+    compress = True
+    permute = False
+else:
+    compress = False
+    permute = True
+
+data_prep = preprocess(args, permute, compress)
 device_ids = args.d_ids
 device = torch.device(f"cuda:{device_ids[0]}" if torch.cuda.is_available() else "cpu")
 
@@ -229,7 +243,7 @@ elif len(args.d_ids) >= 4:
 
 loss_fun = torch.nn.MSELoss()
 best_model = nn.DataParallel(torch.load(args.path+"model.pth", map_location=device).module, device_ids=device_ids)
-data_prep = preprocess(test_mode=True)
+data_prep = preprocess(args, permute, compress, test_mode=True)
 
 # on val set
 print("Validation in test setting")

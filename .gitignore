@@ -4,3 +4,5 @@ nohup.out
 Evaluation/__pycache__/
 TF-net/__pycache__/
 run*.sh
+data5.pt
+
