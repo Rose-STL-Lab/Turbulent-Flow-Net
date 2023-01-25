@@ -166,7 +166,7 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
         print("log_c_t:",log_c_t,"relu_c_t:",relu_c_t)
     return valid_mse, val_reg,preds, trues
 
-def test_epoch(test_loader, model, loss_function,test_mode=True, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
+def test_epoch(args, test_loader, model, loss_function,test_mode=True, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     valid_mse = []
     # preds = []
     # trues = []
@@ -206,7 +206,7 @@ def test_epoch(test_loader, model, loss_function,test_mode=True, device=torch.de
         valid_mse = round(np.mean(valid_mse), 5)
         loss_curve = np.array(loss_curve).reshape(-1,60)
         loss_curve = np.sqrt(np.mean(loss_curve, axis = 0))
-        print(loss_curve*4506.0068)
+        print(loss_curve*args.std)
     return preds, trues, loss_curve
     
 def lyapunov_func(im,y,f=F.mse_loss): # batch*tensor --> R

@@ -74,7 +74,7 @@ def parse_arguments():
                         default=None)
     parser.add_argument("--slope",
                         type=int,
-                        default=None) # 300
+                        default=300) # 300
     parser.add_argument("--slope_init",
                         help="if slope is None, i.e. slope is learnt, init it with this value",
                         type=int,
@@ -115,6 +115,9 @@ def preprocess(args, permute = False, compress = True, test_mode=False):
     data = (data - avg)/std
     if compress:
         data = data[:,:,::4,::4]
+
+    args.avg = avg.item()
+    args.std = std.item()
 
     # divide each rectangular snapshot into 7 subregions
     # data_prep shape: num_subregions * time * channels * w * h
@@ -249,7 +252,7 @@ data_prep = preprocess(args, permute, compress, test_mode=True)
 print("Validation in test setting")
 test_set = Dataset(valid_indices, input_length + time_range - 1, 40, 60, data_prep, True,test_mode=True)
 test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = 8)
-preds, trues, loss_curve = test_epoch(test_loader, best_model, loss_fun,test_mode=True,device=device)
+preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=True,device=device)
 
 torch.save({"loss_curve": loss_curve}, 
             args.path+"results_val.pt",pickle_protocol=5)
@@ -259,7 +262,7 @@ if not args.only_val:
     print("Testing in test setting")
     test_set = Dataset(test_indices, input_length + time_range - 1, 40, 60, data_prep, True,test_mode=True)
     test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = 8)
-    preds, trues, loss_curve = test_epoch(test_loader, best_model, loss_fun,test_mode=True,device=device)
+    preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=True,device=device)
 
     torch.save({"loss_curve": loss_curve}, 
                 args.path+"results.pt",pickle_protocol=5)
