@@ -16,6 +16,60 @@ import kornia
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
+class Scaler:
+    def __init__(self, type, over_ch = True):
+        type_ch = ['std','norm']
+        if type not in type_ch:
+            raise ValueError(f"{type} is not in {type_ch}")
+        self.type = type
+        self.over_ch = over_ch
+
+    def fit_transform(self, x):
+        assert self.over_ch or x.shape[1] == 2
+        dim = tuple(range(len(x.shape))) if self.over_ch else (0,) + tuple(range(2,len(x.shape)))
+        keepdim = False if self.over_ch else True
+        if self.type == 'std':
+            self.alpha = torch.mean(x, dim=dim, keepdim=keepdim)
+            self.beta = torch.std(x, dim=dim, keepdim=keepdim)
+        elif self.type == 'norm':
+            _max= torch.amax(x, dim=dim, keepdim=keepdim)
+            _min= torch.amin(x, dim=dim, keepdim=keepdim)
+            self.alpha = _min
+            self.beta = _max - _min
+        else:
+            raise ValueError("Dude, update me with new types!!!")
+        print(self.alpha.view(-1)); print(self.beta.view(-1))
+        return (x - self.alpha)/self.beta
+
+    def inv_transform(self, y):
+        assert self.over_ch or y.shape[1] == 2
+        if type(y) is not np.ndarray:
+            # if y is np.ndarray then no need of this.
+            self.beta = self.beta.to(y.device)
+            self.alpha = self.alpha.to(y.device)
+            return (y * self.beta) + self.alpha
+        else:
+            return (y * self.beta.numpy()) + self.alpha.numpy()
+
+def preprocess(args, permute = False, compress = True, test_mode=False):
+    data = torch.load(args.data)
+    if permute:
+        data = torch.permute(data, (0, 3, 1, 2))
+
+    if compress:
+        data = data[:,:,::4,::4]
+
+    data = args.transform.fit_transform(data)
+
+    # divide each rectangular snapshot into 7 subregions
+    # data_prep shape: num_subregions * time * channels * w * h
+    if not test_mode:
+        data_prep = torch.FloatTensor(torch.stack([data[:,:,:,k*64:(k+1)*64] for k in range(7)]))
+        #print(data_prep.shape)
+    else:
+        data_prep = torch.FloatTensor(data) # full domain
+    return data_prep
+
 class Dataset(data.Dataset):
     def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x,test_mode=False): # test_mode: full areas or not
         self.input_length = input_length
@@ -166,11 +220,14 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
         print("log_c_t:",log_c_t,"relu_c_t:",relu_c_t)
     return valid_mse, val_reg,preds, trues
 
-def test_epoch(args, test_loader, model, loss_function,test_mode=True, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
+def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_preds=False, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
+    # print("Samples will be inverse transformed for correct estimates!")
     valid_mse = []
-    # preds = []
-    # trues = []
-    preds = trues = None
+    if save_preds:
+        preds = []
+        trues = []
+    else:
+        preds = trues = None
     with torch.no_grad():
         loss_curve = []
         test_data = tqdm(test_loader)
@@ -189,6 +246,7 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, device=to
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)
                 xx = torch.cat([xx[:, 2:], im], 1)
+                # mse = loss_function(args.transform.inv_transform(im), args.transform.inv_transform(y))
                 mse = loss_function(im, y)
                 loss += mse
                 loss_curve.append(mse.item())
@@ -196,17 +254,20 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, device=to
                 ims.append(im.cpu().data.numpy())
 
             ims = np.array(ims).transpose(1,0,2,3,4)    
-            # preds.append(ims)
-            # trues.append(yy.cpu().data.numpy())            
+            if save_preds:
+                preds.append(ims)
+                trues.append(yy.cpu().data.numpy())            
             valid_mse.append(loss.item()/yy.shape[1])
 
-        # preds = np.concatenate(preds, axis = 0)  
-        # trues = np.concatenate(trues, axis = 0)
+        if save_preds:
+            preds = np.concatenate(preds, axis = 0)  
+            trues = np.concatenate(trues, axis = 0)
         
         valid_mse = round(np.mean(valid_mse), 5)
         loss_curve = np.array(loss_curve).reshape(-1,60)
         loss_curve = np.sqrt(np.mean(loss_curve, axis = 0))
-        print(loss_curve*args.std)
+        # print(loss_curve)
+        print(args.transform.beta.numpy()* loss_curve)
     return preds, trues, loss_curve
     
 def lyapunov_func(im,y,f=F.mse_loss): # batch*tensor --> R

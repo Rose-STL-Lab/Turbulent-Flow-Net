@@ -14,7 +14,7 @@ import time
 from model import LES
 from torch.autograd import Variable
 from penalty import DivergenceLoss
-from train import Dataset, train_epoch, eval_epoch, test_epoch
+from train import Dataset, train_epoch, eval_epoch, test_epoch, preprocess, Scaler
 import warnings
 warnings.filterwarnings("ignore")
 import argparse
@@ -65,7 +65,7 @@ def parse_arguments():
                         default=1)
     parser.add_argument("--path",
                         type=str,
-                        default="./")
+                        default="./results/")
     parser.add_argument("--epoch",
                         type=int,
                         default=100)
@@ -103,31 +103,6 @@ def parse_arguments():
                         
 
 
-def preprocess(args, permute = False, compress = True, test_mode=False):
-    data = torch.load(args.data)
-    if permute:
-        data = torch.permute(data, (0, 3, 1, 2))
-
-    # standardization
-    std = torch.std(data)
-    avg = torch.mean(data)
-    print(std,avg)
-    data = (data - avg)/std
-    if compress:
-        data = data[:,:,::4,::4]
-
-    args.avg = avg.item()
-    args.std = std.item()
-
-    # divide each rectangular snapshot into 7 subregions
-    # data_prep shape: num_subregions * time * channels * w * h
-    if not test_mode:
-        data_prep = torch.FloatTensor(torch.stack([data[:,:,:,k*64:(k+1)*64] for k in range(7)]))
-        #print(data_prep.shape)
-    else:
-        data_prep = torch.FloatTensor(data) # full domain
-    return data_prep
-
 args = parse_arguments()
 
 torch.manual_seed(args.seed)
@@ -140,9 +115,14 @@ ic_print(args.seed)
 if args.data == "rbc_data.pt":
     compress = True
     permute = False
-else:
+    transform_type = 'std'
+elif args.data == 'data5.pt':
     compress = False
     permute = True
+    transform_type = 'norm'
+else:
+    raise ValueError("Un expected data file name")
+args.transform = Scaler(transform_type)
 
 data_prep = preprocess(args, permute, compress)
 device_ids = args.d_ids

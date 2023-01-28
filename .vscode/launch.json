@@ -11,7 +11,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--slope_init", "100", "--d_ids", "0", "--data", "data5.pt"],
+            "args": ["--coef2", "0", "--d_ids", "0", "--data", "rbc_data.pt", "--epoch", "0"],
             "justMyCode": true,
             "env": {
                 "CUBLAS_WORKSPACE_CONFIG":":4096:8"
