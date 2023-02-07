@@ -9,6 +9,7 @@ import pandas as pd
 from torch.utils import data
 import itertools
 import re
+from math import ceil
 import random
 import time
 from model import LES
@@ -72,6 +73,9 @@ def parse_arguments():
     parser.add_argument("--mide",
                         type=float,
                         default=None)
+    parser.add_argument("--m_init",
+                        type=float,
+                        default=0.09)
     parser.add_argument("--slope",
                         type=int,
                         default=300) # 300
@@ -99,6 +103,21 @@ def parse_arguments():
     parser.add_argument("--data",
                         type=str,
                         default="rbc_data.pt")
+    parser.add_argument("--outln_steps",
+                        type=int,
+                        default=0)
+    parser.add_argument("--outln_init",
+                        type=int,
+                        help="init if warmuping",
+                        default = 4) 
+    parser.add_argument("--outln_stride",
+                        type=int,
+                        help="stride to take, if None, then stride = args.output_length - args.outln_init, that is one jump",
+                        default = None)  
+    parser.add_argument("--noise",
+                        type=int,
+                        help="noise to be added to the data",
+                        default = None)    
     return parser.parse_args()
                         
 
@@ -115,14 +134,16 @@ ic_print(args.seed)
 if args.data == "rbc_data.pt":
     compress = True
     permute = False
+    offset=0
     transform_type = 'std'
 elif args.data == 'data5.pt':
     compress = False
     permute = True
-    transform_type = 'norm'
+    offset = 60
+    transform_type = 'std'
 else:
     raise ValueError("Un expected data file name")
-args.transform = Scaler(transform_type)
+args.transform = Scaler(transform_type, offset)
 
 data_prep = preprocess(args, permute, compress)
 device_ids = args.d_ids
@@ -132,7 +153,7 @@ print("run lya model using device:",device)
 #best_params: kernel_size 3, learning_rate 0.001, dropout_rate 0, batch_size 120, input_length 25, output_length 4
 min_mse = args.min_mse
 time_range  = args.time_range
-output_length = args.output_length
+output_length = args.outln_init
 input_length = args.input_length
 learning_rate = args.learning_rate
 dropout_rate = args.dropout_rate
@@ -148,10 +169,18 @@ model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = 
             dropout_rate = dropout_rate, time_range = time_range).to(device)
 model = nn.DataParallel(model, device_ids=device_ids)
 
-train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, True)
+assert args.output_length >= args.outln_init
+if args.outln_stride is None:
+    args.outln_stride = args.output_length - args.outln_init
+if args.outln_steps != 0:
+    outln_rate = ceil((args.output_length - args.outln_init) / args.outln_stride) / args.outln_steps    
+else:
+    outln_rate = 0
+    args.outln_init = args.output_length
+    
 valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_prep, True)
-train_loader = data.DataLoader(train_set, batch_size = batch_size, shuffle = True, num_workers = 8)
 valid_loader = data.DataLoader(valid_set, batch_size = batch_size, shuffle = False, num_workers = 8)
+
 loss_fun = torch.nn.MSELoss()
 regularizer = DivergenceLoss(torch.nn.MSELoss()) #Has cuda leak to zeroth device
 coef = args.coef
@@ -167,7 +196,7 @@ if args.mide is None or args.slope is None:
             m_pred.weight = nn.Parameter(torch.ones_like(m_pred.weight))
             if args.use_time:
                 m_pred.weight.data[:,1] = 0.0
-            m_pred.bias = nn.Parameter(-0.09*torch.ones_like(m_pred.bias))
+            m_pred.bias = nn.Parameter(-args.m_init*torch.ones_like(m_pred.bias))
             self.m_pred = m_pred
 
             if args.slope is None:
@@ -197,6 +226,13 @@ test_mse = []
 for i in range(args.epoch):
     start = time.time()
     scheduler.step()
+
+    if i <= args.outln_steps:    
+        output_length = min(int(outln_rate * i)*args.outln_stride + args.outln_init , args.output_length)
+        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, True)
+        train_loader = data.DataLoader(train_set, batch_size = batch_size, shuffle = True, num_workers = 8)
+
+    ic_print(output_length)
     model.train()
     train_mse_rst,train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
     train_mse.append(train_mse_rst)
@@ -213,7 +249,8 @@ for i in range(args.epoch):
     #if (len(train_mse) > 50 and np.mean(valid_mse[-5:]) >= np.mean(valid_mse[-10:-5])):
     #        break
     ic_print(i, train_mse[-1],train_reg[-1], valid_mse[-1],val_reg[-1], round((end-start)/60,5))
-    ic_print(m_pred.m_pred.weight, m_pred.m_pred.bias, m_pred.slope)
+    if m_pred is not None:
+        ic_print(m_pred.m_pred.weight, m_pred.m_pred.bias, m_pred.slope)
 ic_print(time_range, min_mse)
 
 batch_size=21

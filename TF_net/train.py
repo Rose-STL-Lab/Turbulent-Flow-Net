@@ -17,39 +17,61 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
 class Scaler:
-    def __init__(self, type, over_ch = True):
-        type_ch = ['std','norm']
+    def __init__(self, type, offset=0, over_ch = True):
+        type_ch = ['std','norm', 'log', 'none']
         if type not in type_ch:
             raise ValueError(f"{type} is not in {type_ch}")
         self.type = type
         self.over_ch = over_ch
+        self.offset = offset
 
     def fit_transform(self, x):
         assert self.over_ch or x.shape[1] == 2
         dim = tuple(range(len(x.shape))) if self.over_ch else (0,) + tuple(range(2,len(x.shape)))
         keepdim = False if self.over_ch else True
+        identity = lambda x: x
+
+        # apply offset
+        x = x[self.offset:]
+
+        # Consider types
         if self.type == 'std':
             self.alpha = torch.mean(x, dim=dim, keepdim=keepdim)
             self.beta = torch.std(x, dim=dim, keepdim=keepdim)
+            self.fun = self.inv_fun = identity
         elif self.type == 'norm':
             _max= torch.amax(x, dim=dim, keepdim=keepdim)
             _min= torch.amin(x, dim=dim, keepdim=keepdim)
             self.alpha = _min
             self.beta = _max - _min
+            self.fun = self.inv_fun = identity
+        elif self.type == 'log':
+            _min= torch.amin(x, dim=dim, keepdim=keepdim)
+            self.alpha = _min - 1
+            self.beta = _min/_min #cheap trick for getting 1
+            self.fun = torch.log
+            self.inv_fun = torch.exp
+        elif self.type == 'none':
+            self.alpha = torch.tensor(0)
+            self.beta = torch.tensor(1)
+            self.fun = self.inv_fun = identity
         else:
             raise ValueError("Dude, update me with new types!!!")
-        print(self.alpha.view(-1)); print(self.beta.view(-1))
-        return (x - self.alpha)/self.beta
+
+        assert self.beta == 1 or self.fun == identity   #This assertion since at test time, printing loss curve without inv transform multiplies with beta
+        print(self.alpha.view(-1)); print(self.beta.view(-1), self.fun, self.inv_fun)
+        return self.fun(x - self.alpha)/self.beta
 
     def inv_transform(self, y):
         assert self.over_ch or y.shape[1] == 2
         if type(y) is not np.ndarray:
-            # if y is np.ndarray then no need of this.
             self.beta = self.beta.to(y.device)
             self.alpha = self.alpha.to(y.device)
-            return (y * self.beta) + self.alpha
         else:
-            return (y * self.beta.numpy()) + self.alpha.numpy()
+            y = torch.from_numpy(y)
+        
+        out = self.inv_fun(y * self.beta) + self.alpha
+        return out if type(y) is not np.ndarray else out.numpy()
 
 def preprocess(args, permute = False, compress = True, test_mode=False):
     data = torch.load(args.data)
@@ -71,7 +93,7 @@ def preprocess(args, permute = False, compress = True, test_mode=False):
     return data_prep
 
 class Dataset(data.Dataset):
-    def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x,test_mode=False): # test_mode: full areas or not
+    def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, noise=0, test_mode=False): # test_mode: full areas or not
         self.input_length = input_length
         self.mid = mid
         self.output_length = output_length
@@ -79,6 +101,7 @@ class Dataset(data.Dataset):
         self.data_prep = data_prep
         self.list_IDs = indices
         self.test_mode = test_mode
+        self.noise = noise
         
     def __len__(self):
         return len(self.list_IDs)
@@ -165,7 +188,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         loss.backward()
         optimizer.step()
         if coef2 != 0:
-            training_data.set_postfix(cur_epoch=cur_epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v, bias_data=m_pred.m_pred.bias.data)
+            training_data.set_postfix(cur_epoch=cur_epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v)
     train_mse = round(np.sqrt(np.mean(train_mse)),5)
     train_reg = round(np.mean(train_reg),5)
     return train_mse,train_reg
@@ -221,7 +244,9 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
     return valid_mse, val_reg,preds, trues
 
 def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_preds=False, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
-    # print("Samples will be inverse transformed for correct estimates!")
+    inv_transform = False
+    if inv_transform:
+        print("==============Samples will be inverse transformed for correct estimates!================")
     valid_mse = []
     if save_preds:
         preds = []
@@ -246,8 +271,10 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)
                 xx = torch.cat([xx[:, 2:], im], 1)
-                # mse = loss_function(args.transform.inv_transform(im), args.transform.inv_transform(y))
-                mse = loss_function(im, y)
+                if inv_transform:
+                    mse = loss_function(args.transform.inv_transform(im), args.transform.inv_transform(y))
+                else:
+                    mse = loss_function(im, y)
                 loss += mse
                 loss_curve.append(mse.item())
                 
@@ -266,8 +293,7 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
         valid_mse = round(np.mean(valid_mse), 5)
         loss_curve = np.array(loss_curve).reshape(-1,60)
         loss_curve = np.sqrt(np.mean(loss_curve, axis = 0))
-        # print(loss_curve)
-        print(args.transform.beta.numpy()* loss_curve)
+        print(args.transform.beta.numpy() * loss_curve if not inv_transform else loss_curve)
     return preds, trues, loss_curve
     
 def lyapunov_func(im,y,f=F.mse_loss): # batch*tensor --> R
