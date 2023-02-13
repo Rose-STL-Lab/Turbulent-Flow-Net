@@ -11,7 +11,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--d_ids", "7", "--data", "data5.pt","--m_init", "0.2"],
+            "args": ["--d_ids", "1", "--data", "data5.pt", "--dnsn", "--noise", "4" , "--addon_enc", "3", "--mide", "0.3", "--slope", "200"],
             "justMyCode": true,
             "env": {
                 "CUBLAS_WORKSPACE_CONFIG":":4096:8"

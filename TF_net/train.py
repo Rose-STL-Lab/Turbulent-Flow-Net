@@ -93,7 +93,7 @@ def preprocess(args, permute = False, compress = True, test_mode=False):
     return data_prep
 
 class Dataset(data.Dataset):
-    def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, noise=0, test_mode=False): # test_mode: full areas or not
+    def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, test_mode=False, noise=0.0, do_not_scale_noise=False): # test_mode: full areas or not
         self.input_length = input_length
         self.mid = mid
         self.output_length = output_length
@@ -102,6 +102,7 @@ class Dataset(data.Dataset):
         self.list_IDs = indices
         self.test_mode = test_mode
         self.noise = noise
+        self.do_not_scale_noise = do_not_scale_noise
         
     def __len__(self):
         return len(self.list_IDs)
@@ -120,6 +121,11 @@ class Dataset(data.Dataset):
             x = data_[(self.mid-self.input_length):self.mid].reshape(-1, y.shape[-2], y.shape[-1])
         else:
             x = data_[(self.mid-self.input_length):self.mid]
+        
+        if self.do_not_scale_noise:
+            x = x + self.noise*0.01*torch.randn_like(x)
+        else:
+            x = x*(1 + self.noise*0.01*torch.randn_like(x))
         
         return x.float(), y.float()
     
@@ -180,7 +186,6 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
             ims.append(im.cpu().data.numpy())
             
             prev_lya = lya_val
-            
         ims = np.concatenate(ims, axis = 1)
         train_mse.append(loss.item()/length) 
         train_reg.append(batch_reg/length)
@@ -310,7 +315,7 @@ def log_barrier(args, dV_dt,coef2,t=1,mide=None,slope=None,cur_pred_mse=None): #
     relu_count = 0
     dV_dt = dV_dt
     if not args.no_weight and slope is not None:
-        assert dV_dt.shape[0] == cur_pred_mse.shape[0], "batch not match"
+        assert dV_dt.shape[0] == cur_pred_mse.shape[0] # "batch not match"
         weights = coef2 / (1+torch.e**(-slope*(cur_pred_mse-mide)))
     else:
         weights = coef2 * np.array([1 for i in range(len(dV_dt))])

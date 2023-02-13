@@ -12,7 +12,7 @@ import re
 from math import ceil
 import random
 import time
-from model import LES
+from model_addon import LES
 from torch.autograd import Variable
 from penalty import DivergenceLoss
 from train import Dataset, train_epoch, eval_epoch, test_epoch, preprocess, Scaler
@@ -82,7 +82,7 @@ def parse_arguments():
     parser.add_argument("--slope_init",
                         help="if slope is None, i.e. slope is learnt, init it with this value",
                         type=int,
-                        default=300) # 300
+                        default=300) # 300  # Reduce this value if you get a nan gradient
     parser.add_argument("--barrier",
                         type=float,
                         default=1e-3)
@@ -116,8 +116,24 @@ def parse_arguments():
                         default = None)  
     parser.add_argument("--noise",
                         type=int,
-                        help="noise to be added to the data",
-                        default = None)    
+                        help="sigma = 0.01*noise",
+                        default = 0.0)
+    parser.add_argument("--dnsn",
+                        help="'do not scale noise', multiply gaussian with the element",
+                        default = False,
+                        action="store_true")
+    parser.add_argument("--wt_decay",
+                            help="weight decay",
+                            default=4e-4,
+                            type=float) 
+    parser.add_argument("--addon_enc",
+                            help="number of additonal layers to encoder",
+                            type=int,
+                            default = 0)
+    parser.add_argument("--addon_dec",
+                            help="number of additonal layers to decoder",
+                            type=int,
+                            default = 0)
     return parser.parse_args()
                         
 
@@ -166,7 +182,7 @@ valid_indices = list(range(6000, 7700))
 test_indices = list(range(7700, 9800))
 
 model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, 
-            dropout_rate = dropout_rate, time_range = time_range).to(device)
+            dropout_rate = dropout_rate, time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec).to(device)
 model = nn.DataParallel(model, device_ids=device_ids)
 
 assert args.output_length >= args.outln_init
@@ -178,7 +194,7 @@ else:
     outln_rate = 0
     args.outln_init = args.output_length
     
-valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_prep, True)
+valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_prep, stack_x=True)
 valid_loader = data.DataLoader(valid_set, batch_size = batch_size, shuffle = False, num_workers = 8)
 
 loss_fun = torch.nn.MSELoss()
@@ -214,7 +230,7 @@ else:
 optimizer = torch.optim.Adam([
                                 {'params': model.parameters()},
                                 {'params': ([] if m_pred is None else m_pred.parameters()), 'lr':1e-4, 'weight_decay':0.0}
-                            ], learning_rate, betas = (0.9, 0.999), weight_decay = 4e-4)
+                            ], learning_rate, betas = (0.9, 0.999), weight_decay = args.wt_decay)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = step_size, gamma = 0.9)
 
 train_mse = []
@@ -229,7 +245,7 @@ for i in range(args.epoch):
 
     if i <= args.outln_steps:    
         output_length = min(int(outln_rate * i)*args.outln_stride + args.outln_init , args.output_length)
-        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, True)
+        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, stack_x=True, noise=args.noise, do_not_scale_noise = args.dnsn)
         train_loader = data.DataLoader(train_set, batch_size = batch_size, shuffle = True, num_workers = 8)
 
     ic_print(output_length)
@@ -244,6 +260,7 @@ for i in range(args.epoch):
     if valid_mse[-1] < min_mse:
         min_mse = valid_mse[-1]   
         torch.save(model, args.path+"model.pth")
+        torch.save(model.module.state_dict(), args.path+"module_stdict.pth")
     end = time.time()
     # change 50 to 100
     #if (len(train_mse) > 50 and np.mean(valid_mse[-5:]) >= np.mean(valid_mse[-10:-5])):
@@ -261,13 +278,20 @@ elif len(args.d_ids) >= 4:
     device_ids = args.d_ids[:3]
     batch_size = 12
 
+# model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, 
+#             dropout_rate = dropout_rate, time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec).to(device)
+# model = nn.DataParallel(model, device_ids=device_ids)
+# model.load_state_dict(torch.load(args.path+"model.pth"))
+# torch.save(model, args.path+"model.pth")
+# torch.save(model.module.state_dict(), args.path+"module_stdict.pth")
+
 loss_fun = torch.nn.MSELoss()
 best_model = nn.DataParallel(torch.load(args.path+"model.pth", map_location=device).module, device_ids=device_ids)
 data_prep = preprocess(args, permute, compress, test_mode=True)
 
 # on val set
 print("Validation in test setting")
-test_set = Dataset(valid_indices, input_length + time_range - 1, 40, 60, data_prep, True,test_mode=True)
+test_set = Dataset(valid_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=True)
 test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = 8)
 preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=True,device=device)
 
