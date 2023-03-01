@@ -90,10 +90,18 @@ def parse_arguments():
                         nargs='+',
                         type=int,
                         default=[2])
-    parser.add_argument("--bnorm", action='store_true', default=False)
-    parser.add_argument("--no_weight", action='store_true', default=False)
-    parser.add_argument("--only_val", action='store_true', default=False)
-    parser.add_argument("--use_time", help="use time as well for (mse - mide) transformation", action='store_true', default=False)
+    parser.add_argument("--bnorm", 
+                        action='store_true', 
+                        default=False)
+    parser.add_argument("--no_weight", 
+                        action='store_true', 
+                        default=False)
+    parser.add_argument("--only_val", 
+                        action='store_true', 
+                        default=False)
+    parser.add_argument("--use_time", 
+                        help="use time as well for (mse - mide) transformation", 
+                        action='store_true', default=False)
     parser.add_argument("--time_factor",
                         type=float,
                         default=0.01)
@@ -136,7 +144,7 @@ def parse_arguments():
                             default = 0)
     parser.add_argument("--not_use_test_mode",
                         action="store_true",
-                        default=True,
+                        default=False,
                         help="test with same config as train mode")
     return parser.parse_args()
                         
@@ -215,7 +223,6 @@ valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_pr
 valid_loader = data.DataLoader(valid_set, batch_size = batch_size, shuffle = False, num_workers = 8)
 
 loss_fun = torch.nn.MSELoss()
-loss_fun_train = torch.nn.MSELoss(reduction='none')
 regularizer = DivergenceLoss(torch.nn.MSELoss()) #Has cuda leak to zeroth device
 coef = args.coef
 coef2 = args.coef2
@@ -268,7 +275,7 @@ for i in range(args.epoch):
 
     ic_print(output_length)
     model.train()
-    train_mse_rst,train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun_train, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
+    train_mse_rst,train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
     train_mse.append(train_mse_rst)
     train_reg.append(train_reg_rst)
     model.eval()
