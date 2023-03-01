@@ -42,7 +42,7 @@ def parse_arguments():
                         default=4)
     parser.add_argument("--input_length",
                         type=int,
-                        default=26)
+                        default=27)
     parser.add_argument("--learning_rate",
                         type=float,
                         default=0.001)

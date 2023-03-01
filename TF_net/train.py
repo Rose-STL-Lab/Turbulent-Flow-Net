@@ -131,6 +131,19 @@ class Dataset(data.Dataset):
         
         return x.float(), y.float()
     
+def mask_gen(epoch, tile_sz=4, image_sz=64, start=15, end=85, lower = 80, upper=100):
+    assert image_sz%tile_sz == 0    #code not tested for other cases
+    mask_ratio = 0.01*min(upper, max(lower, lower + ((upper-lower)*(epoch-start))/(end-start)))
+    iv,jv = [x.flatten() for x in np.meshgrid(np.arange(image_sz//tile_sz), np.arange(image_sz//tile_sz), indexing='ij')]
+    mask_i = np.random.choice(len(iv), int(mask_ratio*len(iv)), replace=False)
+
+    mask = torch.ones((image_sz,image_sz))
+    for idx in zip(mask_i):
+        i, j = iv[idx]*tile_sz, jv[idx]*tile_sz
+        mask[i:i+tile_sz,j:j+tile_sz] = 0
+    print(mask_ratio, (mask == 0).sum() / len(mask.flatten()))
+    return mask
+    
 def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0,cur_epoch=-1,barrier=1e2,mide=None,slope=None, 
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     if slope is None:
@@ -139,7 +152,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
     train_reg = []
     training_data = tqdm(train_loader)
 
-    for _,(xx, yy) in enumerate(training_data):
+    for _, (xx, yy) in enumerate(training_data):
         loss = 0
         batch_reg = 0
         ims = []
@@ -150,13 +163,15 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
+
+        mask = mask_gen(cur_epoch).to(xx.device)
     
         for cur_t, y in enumerate(yy):
             #print("xx:",xx.shape,"yy:",yy.shape,y.shape)
-            im = model(xx)
+            im = model(torch.cat((xx[:,2:], y*mask), 1))
             xx = torch.cat([xx[:, 2:], im], 1)
             
-            pred_loss = loss_function(im, y)
+            pred_loss = (loss_function(im, y)).mean()
             lya_val = lyapunov_func(im,y)  # (Batch, )
             
             if coef != 0:
@@ -219,7 +234,7 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
             prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
             
             for y in yy:
-                im = model(xx)
+                im = model(torch.cat((xx[:,2:], torch.zeros_like(y)), 1))
                 xx = torch.cat([xx[:, 2:], im], 1)
                 pred_loss = loss_function(im,y)
                 loss += pred_loss
@@ -273,7 +288,7 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
 
             for y in yy.transpose(0,1):
                 try:
-                    im = model(xx,test_mode=test_mode)
+                    im = model(torch.cat((xx[:,2:], torch.zeros_like(y)), 1), test_mode=test_mode)
                 except TypeError as err:
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)
