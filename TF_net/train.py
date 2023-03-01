@@ -141,7 +141,7 @@ def mask_gen(epoch, tile_sz=4, image_sz=64, start=15, end=85, lower = 80, upper=
     for idx in zip(mask_i):
         i, j = iv[idx]*tile_sz, jv[idx]*tile_sz
         mask[i:i+tile_sz,j:j+tile_sz] = 0
-    print(mask_ratio, (mask == 0).sum() / len(mask.flatten()))
+    # print(mask_ratio, (mask == 0).sum() / len(mask.flatten()))
     return mask
     
 def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0,cur_epoch=-1,barrier=1e2,mide=None,slope=None, 
@@ -164,14 +164,15 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
 
-        mask = mask_gen(cur_epoch).to(xx.device)
+        mask_predict = mask_gen(cur_epoch).to(xx.device)
+        mask_loss = 1-mask_predict
     
         for cur_t, y in enumerate(yy):
             #print("xx:",xx.shape,"yy:",yy.shape,y.shape)
-            im = model(torch.cat((xx[:,2:], y*mask), 1))
+            im = model(torch.cat((xx[:,2:], y*mask_predict), 1))
             xx = torch.cat([xx[:, 2:], im], 1)
             
-            pred_loss = (loss_function(im, y)).mean()
+            pred_loss = (loss_function(im, y)*mask_loss).mean()
             lya_val = lyapunov_func(im,y)  # (Batch, )
             
             if coef != 0:

@@ -20,6 +20,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import argparse
 from icecream import ic as ic_print
+import mlflow
 
 # Reproducibility
 torch.backends.cudnn.benchmark = False
@@ -90,10 +91,18 @@ def parse_arguments():
                         nargs='+',
                         type=int,
                         default=[2])
-    parser.add_argument("--bnorm", action='store_true', default=False)
-    parser.add_argument("--no_weight", action='store_true', default=False)
-    parser.add_argument("--only_val", action='store_true', default=False)
-    parser.add_argument("--use_time", help="use time as well for (mse - mide) transformation", action='store_true', default=False)
+    parser.add_argument("--bnorm", 
+                        action='store_true', 
+                        default=False)
+    parser.add_argument("--no_weight", 
+                        action='store_true', 
+                        default=False)
+    parser.add_argument("--only_val", 
+                        action='store_true', 
+                        default=False)
+    parser.add_argument("--use_time", 
+                        help="use time as well for (mse - mide) transformation", 
+                        action='store_true', default=False)
     parser.add_argument("--time_factor",
                         type=float,
                         default=0.01)
@@ -136,7 +145,11 @@ def parse_arguments():
                             default = 0)
     parser.add_argument("--not_use_test_mode",
                         action="store_true",
-                        default=True,
+                        default=False,
+                        help="test with same config as train mode")
+    parser.add_argument("--not_use_test_mode",
+                        action="store_true",
+                        default=False,
                         help="test with same config as train mode")
     return parser.parse_args()
                         
