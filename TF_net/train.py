@@ -93,7 +93,8 @@ def preprocess(args, permute = False, compress = True, test_mode=False):
     return data_prep
 
 class Dataset(data.Dataset):
-    def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, test_mode=False, noise=0.0, do_not_scale_noise=False): # test_mode: full areas or not
+    def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, test_mode=False, test_mode_train=False, split_spatially=False,
+                    noise=0.0, do_not_scale_noise=False): # test_mode: full areas or not
         self.input_length = input_length
         self.mid = mid
         self.output_length = output_length
@@ -102,6 +103,7 @@ class Dataset(data.Dataset):
         self.list_IDs = indices
         self.test_mode = test_mode
         self.noise = noise
+        self.test_mode_train = test_mode_train
         self.do_not_scale_noise = do_not_scale_noise
         
     def __len__(self):
@@ -109,9 +111,9 @@ class Dataset(data.Dataset):
 
     def __getitem__(self, index):
         ID = self.list_IDs[index]
-        j = ID // 7
+        j = ID // 7 if not self.test_mode_train else ID
         #i = ID % 7
-        if self.test_mode:
+        if self.test_mode or self.test_mode_train:
             data_ = self.data_prep[j:j+100]#[i,j:j+100]
         else:
             i = ID % 7

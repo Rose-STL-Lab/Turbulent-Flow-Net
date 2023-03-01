@@ -5,4 +5,6 @@ Evaluation/__pycache__/
 TF-net/__pycache__/
 run*.sh
 data5.pt
+data9_101.pt
+data21_101.pt
 

@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+    
 
         {
             "name": "Python: Current File",
@@ -11,7 +12,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--d_ids", "1", "--data", "data5.pt", "--dnsn", "--noise", "4" , "--addon_enc", "3", "--mide", "0.3", "--slope", "200"],
+            "args": ["--d_ids", "1", "--epoch", "1", "--input_length", "24", "--data", "rbc_data.pt", "--coef2", "0", "--not_use_test_mode"],
             "justMyCode": true,
             "env": {
                 "CUBLAS_WORKSPACE_CONFIG":":4096:8"
