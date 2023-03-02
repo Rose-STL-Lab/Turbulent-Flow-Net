@@ -1,8 +1,8 @@
 results/
 rbc_data.pt
 nohup.out
-Evaluation/__pycache__/
-TF-net/__pycache__/
+__pycache__
+__pycache__
 run*.sh
 data5.pt
 data9_101.pt
