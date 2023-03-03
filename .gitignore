@@ -2,9 +2,9 @@ results/
 rbc_data.pt
 nohup.out
 __pycache__
-__pycache__
 run*.sh
 data5.pt
 data9_101.pt
 data21_101.pt
+.aim/
 

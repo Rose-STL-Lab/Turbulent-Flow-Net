@@ -30,7 +30,8 @@ torch.use_deterministic_algorithms(True)
 
 args = parse_arguments()
 args.use_test_mode = not args.not_use_test_mode
-
+print(args)
+exit()
 #aim run
 run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
@@ -65,6 +66,7 @@ else:
     raise ValueError("Un expected data file name")
 args.transform = Scaler(transform_type, offset)
 run['transform'] = vars(args.transform)
+run.description = args.desc
 
 data_prep = preprocess(args, permute, compress, test_mode_train)
 device_ids = args.d_ids
@@ -160,14 +162,14 @@ for i in range(args.epoch):
 
     ic_print(output_length)
     model.train()
-    train_mse_rst,train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun_train, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
+    train_mse_rst, train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun_train, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
     train_mse.append(train_mse_rst)
     train_reg.append(train_reg_rst)
     model.eval()
     mse, val_reg_rst,preds, trues = eval_epoch(valid_loader, model, loss_fun,coef2,barrier=args.barrier,mide=args.mide,slope=args.slope, device=device)
     valid_mse.append(mse)
     val_reg.append(val_reg_rst)
-    run.track({'train_mse': train_mse, 'train_reg': train_reg_rst}, context={'subset': 'train'}, epoch=i)
+    run.track({'train_mse': train_mse_rst, 'train_reg': train_reg_rst}, context={'subset': 'train'}, epoch=i)
     run.track({'val_mse': mse, 'val_reg': val_reg_rst}, context={'subset': 'val'}, epoch=i)
     if valid_mse[-1] < min_mse:
         min_mse = valid_mse[-1]   
@@ -180,7 +182,6 @@ for i in range(args.epoch):
     #        break
     ic_print(i, train_mse[-1],train_reg[-1], valid_mse[-1],val_reg[-1], round((end-start)/60,5))
     if m_pred is not None:
-        run.track({'m_pred_weight': m_pred.m_pred.weight, 'm_pred.bias': m_pred.m_pred.bias, 'm_pred.slope': m_pred.slope}, epoch=i)
         ic_print(m_pred.m_pred.weight, m_pred.m_pred.bias, m_pred.slope)
 ic_print(time_range, min_mse)
 
@@ -212,7 +213,7 @@ preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,te
 torch.save({"loss_curve": loss_curve}, 
             args.path+f"results_val{'' if args.use_test_mode else '_64'}.pt",pickle_protocol=5)
 for i, lc in enumerate(loss_curve):
-    run.track(lc, name=f"val_test_curve{'' if args.use_test_mode else '_64'}", step=i)
+    run.track(args.transform.beta.numpy() * lc, name=f"val_test_curve{'' if args.use_test_mode else '_64'}", context={'subset': 'test'}, step=i)
 
 # On test set
 if not args.only_val:
@@ -224,4 +225,4 @@ if not args.only_val:
     torch.save({"loss_curve": loss_curve}, 
                 args.path+f"results{'' if args.use_test_mode else '_64'}.pt",pickle_protocol=5)
     for i, lc in enumerate(loss_curve):
-        run.track(lc, name=f"test_curve{'' if args.use_test_mode else '_64'}", step=i)
+        run.track(args.transform.beta.numpy() * lc, name=f"test_curve{'' if args.use_test_mode else '_64'}", context={'subset': 'test'}, step=i)

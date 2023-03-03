@@ -163,8 +163,8 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
-
-        mask_predict = mask_gen(cur_epoch).to(xx.device)
+        
+        mask_predict = mask_gen(100).to(xx.device)
         mask_loss = 1-mask_predict
     
         for cur_t, y in enumerate(yy):
