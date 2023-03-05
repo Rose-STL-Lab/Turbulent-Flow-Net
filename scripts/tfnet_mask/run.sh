@@ -5,9 +5,9 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 d_id=0
 coef2=0
 not_use_test_mode=
-input_length=27
-array=( "53" )
-array2=( "6" )
+input_length=26
+array=( "19" "43" "17" "41" "53")
+array2=( "1" "2" "4" "5" "7" )
 for temp in 1 ; do
     for i in "${!array[@]}"; do
         seed="${array[i]}" 

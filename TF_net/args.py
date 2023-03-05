@@ -15,7 +15,7 @@ def parse_arguments():
                         default=4)
     parser.add_argument("--input_length",
                         type=int,
-                        default=27)
+                        default=26)
     parser.add_argument("--learning_rate",
                         type=float,
                         default=0.001)
@@ -96,7 +96,7 @@ def parse_arguments():
                         help="stride to take, if None, then stride = args.output_length - args.outln_init, that is one jump",
                         default = None)  
     parser.add_argument("--noise",
-                        type=int,
+                        type=float,
                         help="sigma = 0.01*noise",
                         default = 0.0)
     parser.add_argument("--dnsn",

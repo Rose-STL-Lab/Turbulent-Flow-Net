@@ -31,7 +31,7 @@ torch.use_deterministic_algorithms(True)
 args = parse_arguments()
 args.use_test_mode = not args.not_use_test_mode
 print(args)
-exit()
+
 #aim run
 run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
