@@ -26,12 +26,15 @@ import aim
 # Reproducibility
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
-torch.use_deterministic_algorithms(True)
-                        
-
+torch.use_deterministic_algorithms(True)                        
 
 args = parse_arguments()
 args.use_test_mode = not args.not_use_test_mode
+print(args)
+
+#aim run
+run = aim.Run(experiment=args.data)
+run['args'] = vars(args)
 
 run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
@@ -67,6 +70,7 @@ else:
     raise ValueError("Un expected data file name")
 args.transform = Scaler(transform_type, offset)
 run['transform'] = vars(args.transform)
+run.description = args.desc
 
 data_prep = preprocess(args, permute, compress, test_mode_train)
 device_ids = args.d_ids
@@ -161,7 +165,7 @@ for i in range(args.epoch):
 
     ic_print(output_length)
     model.train()
-    train_mse_rst, train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
+    train_mse_rst, train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun_train, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
     train_mse.append(train_mse_rst)
     train_reg.append(train_reg_rst)
     model.eval()
