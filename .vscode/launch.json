@@ -12,7 +12,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--d_ids", "1", "--epoch", "1", "--desc", "some text", "--data", "rbc_data.pt", "--coef2", "0", "--not_use_test_mode"],
+            "args": ["--d_ids", "1", "--epoch", "1", "--data", "rbc_data.pt", "--coef2", "0", "--mask"],
             "justMyCode": true,
             "env": {
                 "CUBLAS_WORKSPACE_CONFIG":":4096:8"

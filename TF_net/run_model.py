@@ -112,6 +112,7 @@ valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_pr
 valid_loader = data.DataLoader(valid_set, batch_size = batch_size, shuffle = False, num_workers = 8)
 
 loss_fun = torch.nn.MSELoss()
+loss_fun_train = torch.nn.MSELoss(reduction='none')
 regularizer = DivergenceLoss(torch.nn.MSELoss()) #Has cuda leak to zeroth device
 coef = args.coef
 coef2 = args.coef2
@@ -165,16 +166,18 @@ for i in range(args.epoch):
 
     ic_print(output_length)
     model.train()
-    train_mse_rst, train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun_train, m_pred, coef, regularizer,coef2,cur_epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
+    train_mse_rst, train_reg_rst = train_epoch(args, train_loader, model, optimizer, loss_fun_train, m_pred, coef, regularizer,coef2,epoch=i,barrier=args.barrier,mide=args.mide,slope=args.slope,device=device)
     train_mse.append(train_mse_rst)
     train_reg.append(train_reg_rst)
     model.eval()
-    mse, val_reg_rst,preds, trues = eval_epoch(valid_loader, model, loss_fun,coef2,barrier=args.barrier,mide=args.mide,slope=args.slope, device=device)
+    mse, val_reg_rst,preds, trues = eval_epoch(args, valid_loader, model, loss_fun,coef2,barrier=args.barrier,mide=args.mide,slope=args.slope, device=device)
     valid_mse.append(mse)
     val_reg.append(val_reg_rst)
     run.track({'train_mse': train_mse_rst, 'train_reg': train_reg_rst}, context={'subset': 'train'}, epoch=i)
     run.track({'val_mse': mse, 'val_reg': val_reg_rst}, context={'subset': 'val'}, epoch=i)
+    run.track({'epoch': i}, epoch=i)    # For filtering runs in the UI
     if valid_mse[-1] < min_mse:
+        print("new_min_mse, epoch: ", i)
         min_mse = valid_mse[-1]   
         torch.save(model, args.path+"model.pth")
         torch.save(model.module.state_dict(), args.path+"module_stdict.pth")

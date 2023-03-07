@@ -131,7 +131,7 @@ class Dataset(data.Dataset):
         
         return x.float(), y.float()
     
-def mask_gen(epoch, tile_sz=4, image_sz=64, start=15, end=85, lower = 80, upper=100):
+def mask_gen(epoch, start, end, lower, upper, tile_sz=4, image_sz=64):
     assert image_sz%tile_sz == 0    #code not tested for other cases
     mask_ratio = 0.01*min(upper, max(lower, lower + ((upper-lower)*(epoch-start))/(end-start)))
     iv,jv = [x.flatten() for x in np.meshgrid(np.arange(image_sz//tile_sz), np.arange(image_sz//tile_sz), indexing='ij')]
@@ -144,42 +144,40 @@ def mask_gen(epoch, tile_sz=4, image_sz=64, start=15, end=85, lower = 80, upper=
     # print(mask_ratio, (mask == 0).sum() / len(mask.flatten()))
     return mask
     
-def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0,cur_epoch=-1,barrier=1e2,mide=None,slope=None, 
+def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0, epoch=-1,barrier=1e2,mide=None,slope=None, 
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     if slope is None:
         slope = m_pred.slope
     train_mse = []
     train_reg = []
     training_data = tqdm(train_loader)
-
     for _, (xx, yy) in enumerate(training_data):
         loss = 0
         batch_reg = 0
         ims = []
-        xx = xx.to(device) # batch*time*width*height
+        xx = xx.to(device) # [batch,time,width,height]
         yy = yy.to(device).transpose(0,1)
-        
         length = len(yy)
-        
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
-        
-        mask_predict = mask_gen(100).to(xx.device)
-        mask_loss = 1-mask_predict
-    
+        if args.mask:
+            predict_mask = mask_gen(epoch, args.mstart, args.mend, args.mlower, args.mupper, args.mtile).to(xx.device)
+            loss_mask = 1-predict_mask
+        else:
+            loss_mask = 1
+
+        # Auto-regressive gen
         for cur_t, y in enumerate(yy):
-            #print("xx:",xx.shape,"yy:",yy.shape,y.shape)
-            im = model(torch.cat((xx[:,2:], y*mask_predict), 1))
+            inp = torch.cat((xx[:,2:], y*predict_mask), 1) if args.mask else xx
+            im = model(inp)
             xx = torch.cat([xx[:, 2:], im], 1)
-            
-            pred_loss = (loss_function(im, y)*mask_loss).mean()
+
+            pred_loss = (loss_function(im, y)*loss_mask).mean()
             lya_val = lyapunov_func(im,y)  # (Batch, )
-            
             if coef != 0:
                 loss += pred_loss + coef*regularizer(im, y)
             else:
                 loss += pred_loss
-
             pred_losses.append(pred_loss.item())
                 
             if coef2 != 0 and prev_lya != None:
@@ -211,12 +209,12 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         loss.backward()
         optimizer.step()
         if coef2 != 0:
-            training_data.set_postfix(cur_epoch=cur_epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v)
+            training_data.set_postfix(epoch=epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v)
     train_mse = round(np.sqrt(np.mean(train_mse)),5)
     train_reg = round(np.mean(train_reg),5)
     return train_mse,train_reg
 
-def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=None,slope=None, device=None):
+def eval_epoch(args, valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=None,slope=None, device=None):
     valid_mse = []
     val_reg = []
     preds = []
@@ -229,13 +227,12 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
             xx = xx.to(device)
             yy = yy.to(device).transpose(0,1)
             ims = []
-            
             length = len(yy)
-            
             prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
             
             for y in yy:
-                im = model(torch.cat((xx[:,2:], torch.zeros_like(y)), 1))
+                inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
+                im = model(inp)
                 xx = torch.cat([xx[:, 2:], im], 1)
                 pred_loss = loss_function(im,y)
                 loss += pred_loss
@@ -253,12 +250,13 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
                 #    batch_reg += lya_reg.item()
                 # ims.append(im.cpu().data.numpy())
                 prev_lya = lya_val
-  
+
             # ims = np.array(ims).transpose(1,0,2,3,4)
             # preds.append(ims)
             # trues.append(yy.transpose(0,1).cpu().data.numpy())
             valid_mse.append(loss.item()/length)
             val_reg.append(batch_reg/length)
+
         # preds = np.concatenate(preds, axis = 0)  
         # trues = np.concatenate(trues, axis = 0)  
         valid_mse = round(np.sqrt(np.mean(valid_mse)), 5)
@@ -267,8 +265,7 @@ def eval_epoch(valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mide=Non
     return valid_mse, val_reg,preds, trues
 
 def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_preds=False, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
-    inv_transform = False
-    if inv_transform:
+    if args.inv_transform:
         print("==============Samples will be inverse transformed for correct estimates!================")
     valid_mse = []
     if save_preds:
@@ -289,12 +286,13 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
 
             for y in yy.transpose(0,1):
                 try:
-                    im = model(torch.cat((xx[:,2:], torch.zeros_like(y)), 1), test_mode=test_mode)
+                    inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
+                    im = model(inp, test_mode=test_mode)
                 except TypeError as err:
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)
                 xx = torch.cat([xx[:, 2:], im], 1)
-                if inv_transform:
+                if args.inv_transform:
                     mse = loss_function(args.transform.inv_transform(im), args.transform.inv_transform(y))
                 else:
                     mse = loss_function(im, y)
@@ -316,7 +314,7 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
         valid_mse = round(np.mean(valid_mse), 5)
         loss_curve = np.array(loss_curve).reshape(-1,60)
         loss_curve = np.sqrt(np.mean(loss_curve, axis = 0))
-        print(args.transform.beta.numpy() * loss_curve if not inv_transform else loss_curve)
+        print(args.transform.beta.numpy() * loss_curve if not args.inv_transform else loss_curve)
     return preds, trues, loss_curve
     
 def lyapunov_func(im,y,f=F.mse_loss): # batch*tensor --> R

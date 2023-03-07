@@ -1,0 +1,1 @@
+(metric.name == "train_mse" or metric.name == "val_mse" or metric.name == "val_test_curve" or metric.name == "min_valid_mse") and (run.args.desc == "tfnet_mask_15_50_80_100_100_16" or run.args.desc == "tfnet" or run.args.desc == "tfnet_mask")

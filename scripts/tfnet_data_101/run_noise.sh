@@ -18,7 +18,7 @@ for temp in 1 ; do
         folder=${name}/${name}_${seed}
         mkdir -p results/$folder
         cp -v ${BASH_SOURCE[0]} results/$folder/
-        python TF_net/run_model.py ${dnsn} --noise ${noise} --data ${data}.pt --coef 0 --coef2 $coef2 --seed ${seed} --d_ids $d_id --path results/$folder/ \
+        python TF_net/run_model.py  --desc $name ${dnsn} --noise ${noise} --data ${data}.pt --coef 0 --coef2 $coef2 --seed ${seed} --d_ids $d_id --path results/$folder/ \
                     2>&1 | tee results/$folder/log.txt &
         wait
     done
