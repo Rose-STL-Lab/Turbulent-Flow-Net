@@ -67,6 +67,9 @@ def parse_arguments():
                         action='store_true', 
                         help="instead of simply multiplying by beta, use inv_transform for testing",
                         default=False)
+    parser.add_argument("--num_workers",
+                        type=int,
+                        default=8)
     
     # mide lyapunov param
     parser.add_argument("--mide",

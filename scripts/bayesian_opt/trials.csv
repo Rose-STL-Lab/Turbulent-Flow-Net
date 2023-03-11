@@ -1,0 +1,2 @@
+,Generation Step,Generation Model,Trial Index,Trial Status,Arm Parameterizations
+0,0,Sobol,0,COMPLETED,"{'0_0': {'mstart': 7, 'mend': 53, 'mlower': 73.6}}"
