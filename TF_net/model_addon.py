@@ -4,7 +4,26 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import pandas as pd
+from positional_encodings.torch_encodings import PositionalEncoding1D
 from torch.utils import data
+
+def get_pos_emb(tstep, xx_len, test_mode, w=64, h=64):
+    inp_len = xx_len // 2
+
+    def single_channel(tstep, inp_len, dim, b_size=1):
+        # b_size is irrelavant, the value will be same for each batch dimension
+        p_enc_1d_model = PositionalEncoding1D(dim)
+        emb_full =  p_enc_1d_model(torch.rand(b_size, tstep + inp_len, dim))
+        return emb_full[:,-inp_len:]
+
+    single_ch_emb = single_channel(tstep, inp_len, h*w, 1)
+    # we want concatenation to be alternate: https://stackoverflow.com/questions/61026393/pytorch-concatenate-rows-in-alternate-order
+    # After operation, emb[0,i] == emb[0,i+1] where i is even
+    emb = torch.cat((single_ch_emb, single_ch_emb), axis=-1).reshape((1, -1, h, w))  
+    if test_mode > 1:
+        emb = [emb for _ in range(test_mode)]
+        emb = torch.cat(emb, dim=-1)
+    return emb
 
 def conv(input_channels, output_channels, kernel_size, stride, dropout_rate, pad=None):
     pad = (kernel_size - 1) // 2 if pad is None else pad
@@ -65,7 +84,7 @@ class Encoder(nn.Module):
 
 
 class LES(nn.Module):
-    def __init__(self, input_channels, output_channels, kernel_size, dropout_rate, time_range, addon_enc=False, addon_dec=False):
+    def __init__(self, input_channels, output_channels, kernel_size, dropout_rate, time_range, addon_enc=False, addon_dec=False, pos_emb = False):
         super(LES, self).__init__()
         self.spatial_filter = nn.Conv2d(1, 1, kernel_size = 3, padding = 1, bias = False)   
         self.temporal_filter = nn.Conv2d(time_range, 1, kernel_size = 1, padding = 0, bias = False)
@@ -87,10 +106,17 @@ class LES(nn.Module):
         self.deconv0 = deconv(64, 32)
         self.output_layer = nn.Conv2d(32 + input_channels, output_channels, kernel_size=kernel_size,
                                       padding=(kernel_size - 1) // 2)
+        self.pos_emb = pos_emb
         
-    def forward(self, xx,test_mode=False):
+    def forward(self, xx, test_mode=False, tstep=None):
         #print("shape:",xx.shape)
         xx_len = xx.shape[1]
+
+        assert self.pos_emb == (tstep is not None)
+        # Use positional encoding if tstep of prediction is provided
+        if tstep is not None:
+            xx = xx + get_pos_emb(tstep, xx_len, 7 if test_mode else 1).to(xx.device)
+
         width = 64 if not test_mode else 64*7
         # u = u_mean + u_tilde + u_prime
         u_tilde = self.spatial_filter(xx.reshape(xx.shape[0]*xx.shape[1], 1, 64, width)).reshape(xx.shape[0], xx.shape[1], 64, width)

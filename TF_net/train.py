@@ -169,7 +169,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         # Auto-regressive gen
         for cur_t, y in enumerate(yy):
             inp = torch.cat((xx[:,2:], y*predict_mask), 1) if args.mask else xx
-            im = model(inp)
+            im = model(inp, tstep = cur_t if args.pos_emb else None)
             xx = torch.cat([xx[:, 2:], im], 1)
 
             pred_loss = (loss_function(im, y)*loss_mask).mean()
@@ -230,9 +230,9 @@ def eval_epoch(args, valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mi
             length = len(yy)
             prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
             
-            for y in yy:
+            for cur_t, y in enumerate(yy):
                 inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
-                im = model(inp)
+                im = model(inp, tstep = cur_t if args.pos_emb else None)
                 xx = torch.cat([xx[:, 2:], im], 1)
                 pred_loss = loss_function(im,y)
                 loss += pred_loss
@@ -284,10 +284,10 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
             loss = 0
             ims = []
 
-            for y in yy.transpose(0,1):
+            for cur_t, y in enumerate(yy.transpose(0,1)):
                 try:
                     inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
-                    im = model(inp, test_mode=test_mode)
+                    im = model(inp, test_mode=test_mode, tstep = cur_t if args.pos_emb else None)
                 except TypeError as err:
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)

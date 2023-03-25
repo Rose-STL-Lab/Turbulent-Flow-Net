@@ -55,7 +55,7 @@ def parse_arguments():
     parser.add_argument("--not_use_test_mode",
                         action="store_true",
                         default=False,
-                        help="test with same config as train mode")
+                        help="test with same config as train mode, i.e. for rbc_data, at test time too divide the data into 7 parts.")
     parser.add_argument("--only_val", 
                         action='store_true', 
                         help="only test on validation",
@@ -70,6 +70,20 @@ def parse_arguments():
     parser.add_argument("--num_workers",
                         type=int,
                         default=8)
+    parser.add_argument("--mixed_indx", 
+                        action='store_true', 
+                        help="mix val and test indexes. Currently, only supported for data* datasets",
+                        default=False)
+    parser.add_argument("--mixed_indx_no_overlap", 
+                        action='store_true', 
+                        help="mix val and test indexes but without any overlap. Currently, only supported for data* datasets",
+                        default=False)
+    parser.add_argument("--version",
+                        type=str,
+                        help="dataset version to used, this version is used for testing, while training is done on some other version of dataset",
+                        nargs="?",
+                        const="",
+                        default="")
     
     # mide lyapunov param
     parser.add_argument("--mide",
@@ -174,4 +188,11 @@ def parse_arguments():
                         type=int,
                         help="tile_size",
                         default = 4)
+    
+    # positional embedding
+    parser.add_argument("--pos_emb",
+                        action="store_true",
+                        default=False,
+                        help="use positional embedding")
+
     return parser.parse_args()

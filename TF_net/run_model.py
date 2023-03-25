@@ -22,6 +22,7 @@ import argparse
 from icecream import ic as ic_print
 from args import parse_arguments
 import aim
+import os
 
 # Reproducibility
 torch.backends.cudnn.benchmark = False
@@ -32,6 +33,12 @@ args = parse_arguments()
 args.use_test_mode = not args.not_use_test_mode
 print(args)
 
+assert not args.mixed_indx or args.data != "rbc_data.pt"
+assert not args.mixed_indx or not args.mixed_indx_no_overlap
+assert not args.mixed_indx_no_overlap or not args.mixed_indx
+assert not args.mixed_indx_no_overlap or args.epoch == 0
+assert not args.version or args.epoch == 0
+
 #aim run
 run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
@@ -39,6 +46,13 @@ run['args'] = vars(args)
 run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
 run.description = args.desc
+
+if 0 < args.epoch < 10:
+    # i.e. Testing
+    if os.path.exists(args.path+"model.pth"):
+        print("The model file already exists!, you might potentially overright it")
+        if not input("Do you want to continue:0/1 "):
+            raise SystemExit
 
 torch.manual_seed(args.seed)
 random.seed(args.seed)
@@ -72,6 +86,9 @@ args.transform = Scaler(transform_type, offset)
 run['transform'] = vars(args.transform)
 run.description = args.desc
 
+# aaply datset version
+args.data = args.data.replace(".pt", args.version + ".pt")
+
 data_prep = preprocess(args, permute, compress, test_mode_train)
 device_ids = args.d_ids
 device = torch.device(f"cuda:{device_ids[0]}" if torch.cuda.is_available() else "cpu")
@@ -89,11 +106,21 @@ batch_size = args.batch_size
 step_size = args.step_size
 
 train_indices = list(range(0, 6000))
-valid_indices = list(range(6000, 7700))
-test_indices = list(range(7700, 9800))
+if args.mixed_indx:
+    valid_indices = list(range(6000, 9800,2))
+    test_indices = list(range(6001, 9800,2))
+elif args.mixed_indx_no_overlap:
+    valid_indices = list(range(6000, 9800, 2*(7)))  # 7, stride, is just some random number
+    test_indices = list(range(6000 + 7, 9800,  2*(7)))
+elif args.version == '_3':
+    valid_indices = list(range(6000, 10000))
+    test_indices = list(range(10000, 12999))
+else:
+    valid_indices = list(range(6000, 7700))
+    test_indices = list(range(7700, 9800))
 
-model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, 
-            dropout_rate = dropout_rate, time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec).to(device)
+model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, dropout_rate = dropout_rate,
+            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, pos_emb= args.pos_emb).to(device)
 model = nn.DataParallel(model, device_ids=device_ids)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -199,16 +226,20 @@ elif len(args.d_ids) >= 4:
     device_ids = args.d_ids[:3]
     batch_size = 12
 
-# model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, 
-#             dropout_rate = dropout_rate, time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec).to(device)
-# model = nn.DataParallel(model, device_ids=device_ids)
-# model.load_state_dict(torch.load(args.path+"model.pth"))
-# torch.save(model, args.path+"model.pth")
-# torch.save(model.module.state_dict(), args.path+"module_stdict.pth")
+model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, dropout_rate = dropout_rate,
+            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, pos_emb= args.pos_emb).to(device)
+# Note: saved_model is already in eval model, 
+# this kinda of trick is needed because the torch.save() stores the class file location.
+# So some models use model addon file others use model file. But model.py simply imports from model_addon.py only
+saved_model = torch.load(args.path+"model.pth", map_location=device).module
+model.load_state_dict(saved_model.state_dict())
+model.eval()    # If this is not used than saved_model and model inferences will be different
 
 loss_fun = torch.nn.MSELoss()
-best_model = nn.DataParallel(torch.load(args.path+"model.pth", map_location=device).module, device_ids=device_ids)
+best_model = nn.DataParallel(model, device_ids=device_ids)
+
 data_prep = preprocess(args, permute, compress, test_mode=args.use_test_mode)
+suffix = f"{args.version}{'' if args.use_test_mode else '_64'}{'_mixed' if args.mixed_indx else ''}{'_mixedNoOv' if args.mixed_indx_no_overlap else ''}"
 
 # on val set
 print("Validation in test setting")
@@ -217,9 +248,9 @@ test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False
 preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
 
 torch.save({"loss_curve": loss_curve}, 
-            args.path+f"results_val{'' if args.use_test_mode else '_64'}.pt",pickle_protocol=5)
+            args.path+f"results_val{suffix}.pt",pickle_protocol=5)
 for i, lc in enumerate(loss_curve):
-    run.track(args.transform.beta.numpy() * lc, name=f"val_test_curve{'' if args.use_test_mode else '_64'}", context={'subset': 'test'}, step=i)
+    run.track(args.transform.beta.numpy() * lc, name=f"val_test_curve{suffix}", context={'subset': 'test'}, step=i)
 
 # On test set
 if not args.only_val:
@@ -229,6 +260,6 @@ if not args.only_val:
     preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
 
     torch.save({"loss_curve": loss_curve}, 
-                args.path+f"results{'' if args.use_test_mode else '_64'}.pt",pickle_protocol=5)
+                args.path+f"results{suffix}.pt",pickle_protocol=5)
     for i, lc in enumerate(loss_curve):
-        run.track(args.transform.beta.numpy() * lc, name=f"test_curve{'' if args.use_test_mode else '_64'}", context={'subset': 'test'}, step=i)
+        run.track(args.transform.beta.numpy() * lc, name=f"test_curve{suffix}", context={'subset': 'test'}, step=i)
