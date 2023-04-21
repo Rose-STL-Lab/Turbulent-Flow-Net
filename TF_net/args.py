@@ -21,11 +21,14 @@ def parse_arguments():
     parser.add_argument("--input_length",
                         type=int,
                         default=26)
+    parser.add_argument("--gamma",
+                        type=float,
+                        default=0.9)
     parser.add_argument("--learning_rate",
                         type=float,
                         default=0.001)
     parser.add_argument("--dropout_rate",
-                        type=int,
+                        type=float,
                         default=0)
     parser.add_argument("--kernel_size",
                         type=int,
@@ -84,6 +87,24 @@ def parse_arguments():
                         nargs="?",
                         const="",
                         default="")
+    parser.add_argument("--rescale_loss",
+                        help="Rescale loss by the output_length",
+                        action="store_true",
+                        default=False)
+    parser.add_argument("--norm_loss",
+                        help="simply divide the loss by the output_length",
+                        action="store_true",
+                        default=False)
+
+    # warmup
+    parser.add_argument("--warm_up_epochs",
+                        type=int,
+                        help="Number of warmup epochs, number of epochs will be increased by warmupepochs",
+                        default=0)
+    parser.add_argument("--warm_up_min_lr",
+                        type=float,
+                        help="lr to start with the warmup",
+                        default=1e-6)
     
     # mide lyapunov param
     parser.add_argument("--mide",
@@ -128,6 +149,10 @@ def parse_arguments():
     parser.add_argument("--no_weight", 
                         action='store_true', 
                         help="No weight scheduler",
+                        default=False)
+    parser.add_argument("--teacher_forcing", 
+                        action='store_true', 
+                        help="use teacher forcing during training",
                         default=False)
     
     # Output length controls
@@ -190,9 +215,19 @@ def parse_arguments():
                         default = 4)
     
     # positional embedding
-    parser.add_argument("--pos_emb",
-                        action="store_true",
-                        default=False,
-                        help="use positional embedding")
+    parser.add_argument("--pos_emb_dim",
+                        default=0,
+                        type=int,
+                        help="use positional embedding for time, with provided dim")
+    
+    #truncate loss idea
+    parser.add_argument("--trunc",
+                        type=int,
+                        help="the output length at which a 'max_loss' param is recorded and all the future values higher that that are ignored.",
+                        default=float('inf'))
+    parser.add_argument("--trunc_factor",
+                        type=float,
+                        help="factor mult to trunc thresh",
+                        default=0.7)
 
     return parser.parse_args()

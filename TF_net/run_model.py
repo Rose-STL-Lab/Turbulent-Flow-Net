@@ -15,7 +15,7 @@ import time
 from model_addon import LES
 from torch.autograd import Variable
 from penalty import DivergenceLoss
-from train import Dataset, train_epoch, eval_epoch, test_epoch, preprocess, Scaler
+from train import Dataset, train_epoch, eval_epoch, test_epoch, preprocess, Scaler, EMA
 import warnings
 warnings.filterwarnings("ignore")
 import argparse
@@ -31,7 +31,8 @@ torch.use_deterministic_algorithms(True)
 
 args = parse_arguments()
 args.use_test_mode = not args.not_use_test_mode
-print(args)
+args.pos_emb = args.pos_emb_dim > 0
+args.epoch += args.warm_up_epochs
 
 assert not args.mixed_indx or args.data != "rbc_data.pt"
 assert not args.mixed_indx or not args.mixed_indx_no_overlap
@@ -47,12 +48,15 @@ run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
 run.description = args.desc
 
-if 0 < args.epoch < 10:
-    # i.e. Testing
-    if os.path.exists(args.path+"model.pth"):
-        print("The model file already exists!, you might potentially overright it")
-        if not input("Do you want to continue:0/1 "):
-            raise SystemExit
+if args.trunc < float('inf'):
+    assert args.output_length > args.trunc
+
+# if 0 < args.epoch < 10:
+#     # i.e. Testing
+#     if os.path.exists(args.path+"model.pth"):
+#         print("The model file already exists! and you are using less than 10 epochs, you might potentially overright it")
+#         if not input("Do you want to continue:0/1 "):
+#             raise SystemExit
 
 torch.manual_seed(args.seed)
 random.seed(args.seed)
@@ -120,16 +124,17 @@ else:
     test_indices = list(range(7700, 9800))
 
 model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, dropout_rate = dropout_rate,
-            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, pos_emb= args.pos_emb).to(device)
+            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, time_emb_dim= args.pos_emb_dim).to(device)
 model = nn.DataParallel(model, device_ids=device_ids)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("num_params: ", num_params)
 
-assert args.output_length >= args.outln_init
+if args.outln_steps:
+    assert args.output_length >= args.outln_init
 if args.outln_stride is None:
     args.outln_stride = args.output_length - args.outln_init
-if args.outln_steps != 0:
+if args.outln_steps:
     outln_rate = ceil((args.output_length - args.outln_init) / args.outln_stride) / args.outln_steps    
 else:
     outln_rate = 0
@@ -173,18 +178,26 @@ else:
 optimizer = torch.optim.Adam([
                                 {'params': model.parameters()},
                                 {'params': ([] if m_pred is None else m_pred.parameters()), 'lr':1e-4, 'weight_decay':0.0}
-                            ], learning_rate, betas = (0.9, 0.999), weight_decay = args.wt_decay)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = step_size, gamma = 0.9)
+                            ], learning_rate if not args.warm_up_epochs else args.warm_up_min_lr, betas = (0.9, 0.999), weight_decay = args.wt_decay)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = step_size, gamma = args.gamma)
+if args.warm_up_epochs > 0:
+    warm_up_inc_rate = (learning_rate - args.warm_up_min_lr)/ args.warm_up_epochs
+
 
 train_mse = []
 train_reg = []
 valid_mse = []
 val_reg = []
 test_mse = []
+ema_mse = EMA(1)
 
 for i in range(args.epoch):
     start = time.time()
-    scheduler.step()
+    if i < args.warm_up_epochs:
+        for grp in optimizer.param_groups:
+            grp['lr'] += warm_up_inc_rate
+    else:
+        scheduler.step()
 
     if i <= args.outln_steps:    
         output_length = min(int(outln_rate * i)*args.outln_stride + args.outln_init , args.output_length)
@@ -203,9 +216,12 @@ for i in range(args.epoch):
     run.track({'train_mse': train_mse_rst, 'train_reg': train_reg_rst}, context={'subset': 'train'}, epoch=i)
     run.track({'val_mse': mse, 'val_reg': val_reg_rst}, context={'subset': 'val'}, epoch=i)
     run.track({'epoch': i}, epoch=i)    # For filtering runs in the UI
-    if valid_mse[-1] < min_mse:
+    run.track({'lr': optimizer.param_groups[0]['lr']}, epoch=i)
+
+    ema_mse.append(valid_mse[-1])
+    if ema_mse.mean() < min_mse:
         print("new_min_mse, epoch: ", i)
-        min_mse = valid_mse[-1]   
+        min_mse = ema_mse.mean() 
         torch.save(model, args.path+"model.pth")
         torch.save(model.module.state_dict(), args.path+"module_stdict.pth")
         run.track(min_mse, name='min_valid_mse', epoch=i)
@@ -227,9 +243,9 @@ elif len(args.d_ids) >= 4:
     batch_size = 12
 
 model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, dropout_rate = dropout_rate,
-            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, pos_emb= args.pos_emb).to(device)
+            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, time_emb_dim= args.pos_emb_dim).to(device)
 # Note: saved_model is already in eval model, 
-# this kinda of trick is needed because the torch.save() stores the class file location.
+# this kind of trick is needed because the torch.save() stores the class file location.
 # So some models use model addon file others use model file. But model.py simply imports from model_addon.py only
 saved_model = torch.load(args.path+"model.pth", map_location=device).module
 model.load_state_dict(saved_model.state_dict())
@@ -241,8 +257,19 @@ best_model = nn.DataParallel(model, device_ids=device_ids)
 data_prep = preprocess(args, permute, compress, test_mode=args.use_test_mode)
 suffix = f"{args.version}{'' if args.use_test_mode else '_64'}{'_mixed' if args.mixed_indx else ''}{'_mixedNoOv' if args.mixed_indx_no_overlap else ''}"
 
+# on train set
+print("Testing on Train set")
+test_set = Dataset(train_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train)
+test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = 8)
+preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
+
+torch.save({"loss_curve": loss_curve}, 
+            args.path+f"results_train{suffix}.pt",pickle_protocol=5)
+for i, lc in enumerate(loss_curve):
+    run.track(args.transform.beta.numpy() * lc, name=f"train_test_curve{suffix}", context={'subset': 'test'}, step=i)
+
 # on val set
-print("Validation in test setting")
+print("Testing on Val set")
 test_set = Dataset(valid_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train)
 test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = args.num_workers)
 preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
@@ -254,7 +281,7 @@ for i, lc in enumerate(loss_curve):
 
 # On test set
 if not args.only_val:
-    print("Testing in test setting")
+    print("Testing on Test set")
     test_set = Dataset(test_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train)
     test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = args.num_workers)
     preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)

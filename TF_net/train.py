@@ -15,6 +15,20 @@ import warnings
 import kornia
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
+from collections import deque
+
+class EMA:
+    def __init__(self, _max = 5) -> None:
+        self.Q = deque()
+        self._max = 5
+
+    def append(self, x):
+        if len(self.Q) > self._max:
+            self.Q.popleft()
+        self.Q.append(x)
+    
+    def mean(self):
+        return sum(self.Q) / len(self.Q)
 
 class Scaler:
     def __init__(self, type, offset=0, over_ch = True):
@@ -170,9 +184,17 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         for cur_t, y in enumerate(yy):
             inp = torch.cat((xx[:,2:], y*predict_mask), 1) if args.mask else xx
             im = model(inp, tstep = cur_t if args.pos_emb else None)
-            xx = torch.cat([xx[:, 2:], im], 1)
-
-            pred_loss = (loss_function(im, y)*loss_mask).mean()
+            if args.teacher_forcing:
+                xx = torch.cat([xx[:, 2:], y], 1)
+            else:
+                xx = torch.cat([xx[:, 2:], im], 1)
+            pred_loss = (loss_function(im, y)*loss_mask)
+            if cur_t == args.trunc-1:
+                trunc_thresh = torch.max(pred_loss)
+            elif cur_t >= args.trunc:
+                about_to_cut = torch.sum(pred_loss > trunc_thresh*args.trunc_factor)
+                pred_loss[pred_loss > trunc_thresh*args.trunc_factor] = 0
+            pred_loss = pred_loss.mean()
             lya_val = lyapunov_func(im,y)  # (Batch, )
             if coef != 0:
                 loss += pred_loss + coef*regularizer(im, y)
@@ -206,6 +228,10 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         train_mse.append(loss.item()/length) 
         train_reg.append(batch_reg/length)
         optimizer.zero_grad()
+        if args.rescale_loss: 
+            loss = loss*4/length
+        if args.norm_loss:
+            loss = loss/length
         loss.backward()
         optimizer.step()
         if coef2 != 0:
@@ -287,7 +313,7 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
             for cur_t, y in enumerate(yy.transpose(0,1)):
                 try:
                     inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
-                    im = model(inp, test_mode=test_mode, tstep = cur_t if args.pos_emb else None)
+                    im = model(inp, test_mode=test_mode, tstep = min(cur_t, args.output_length-1) if args.pos_emb else None)
                 except TypeError as err:
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)

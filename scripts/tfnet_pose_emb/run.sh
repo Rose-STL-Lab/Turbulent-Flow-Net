@@ -4,21 +4,21 @@ conda activate tfnet
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 d_id=0
 coef2=0
-server=roselab1
-pos_emb=--pos_emb
+pos_emb_dim=64
+outln=6
 
 array=( "17" "19" "41" "43" "53" )
-array2=( "3" "3" "3" "2" "2" )
-for temp in 1 ; do
+array2=( "3" "1" "2" "5" "6" )
+for dfasdf in 0.3 ;  do
     for i in "${!array[@]}"; do
         seed="${array[i]}" 
         d_id="${array2[i]}"
         echo $seed $d_id
-        name=${server}_tfnet${pos_emb}
+        name=tfnet_pos_emb_${pos_emb_dim}_outln_${outln}
         folder=${name}/${name}_${seed}
         mkdir -p results/$folder
         cp -v ${BASH_SOURCE[0]} results/$folder/
-        python TF_net/run_model.py $pos_emb --desc $name --epoch 0 --coef 0 --coef2 $coef2 --seed ${seed} --d_ids $d_id --path results/$folder/ \
+        python TF_net/run_model.py --epoch 0 --output_length ${outln} --pos_emb_dim $pos_emb_dim --desc $name --coef 0 --coef2 $coef2 --seed ${seed} --d_ids $d_id --path results/$folder/ \
                     2>&1 | tee results/$folder/log.txt &
     done
     wait
