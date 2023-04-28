@@ -5,5 +5,6 @@ __pycache__
 data5.pt
 data9_101*.pt
 data21_101*.pt
+data20_101*.pt
 .aim/
 .aim_legacy

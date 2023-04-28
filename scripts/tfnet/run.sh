@@ -13,7 +13,7 @@ norm_loss=--norm_loss
 array=( "17" "19" "41" "43" )
 array2=( "1" "5" "6" "7" )
 for lr in 1e-3 5e-2 1e-2 ; do
-    for gamma in 0.94 0.9; do
+    for gamma in 0.9 0.94; do
         for i in "${!array[@]}"; do
             seed="${array[i]}" 
             d_id="${array2[i]}"
