@@ -1,5 +1,5 @@
 import argparse
-def parse_arguments():
+def parse_arguments(args=None):
     parser = argparse.ArgumentParser()
 
     # Main Params
@@ -230,4 +230,4 @@ def parse_arguments():
                         help="factor mult to trunc thresh",
                         default=0.7)
 
-    return parser.parse_args()
+    return parser.parse_args(args=args)

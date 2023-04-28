@@ -290,7 +290,7 @@ def eval_epoch(args, valid_loader, model, loss_function,coef2=1.0,barrier=1e2,mi
         print("log_c_t:",log_c_t,"relu_c_t:",relu_c_t)
     return valid_mse, val_reg,preds, trues
 
-def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_preds=False, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
+def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_preds=False, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"), num_batches=float('inf')):
     if args.inv_transform:
         print("==============Samples will be inverse transformed for correct estimates!================")
     valid_mse = []
@@ -302,7 +302,9 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
     with torch.no_grad():
         loss_curve = []
         test_data = tqdm(test_loader)
-        for _,(xx, yy) in enumerate(test_data):
+        for batch_no,(xx, yy) in enumerate(test_data):
+            if batch_no >= num_batches:
+                break
         # for xx, yy in test_loader:
             xx = xx.to(device)
             yy = yy.to(device)
