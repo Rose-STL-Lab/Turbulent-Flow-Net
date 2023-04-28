@@ -302,10 +302,9 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
     with torch.no_grad():
         loss_curve = []
         test_data = tqdm(test_loader)
-        for batch_no,(xx, yy) in enumerate(test_data):
+        for batch_no, (xx, yy) in enumerate(test_data):
             if batch_no >= num_batches:
                 break
-        # for xx, yy in test_loader:
             xx = xx.to(device)
             yy = yy.to(device)
             
