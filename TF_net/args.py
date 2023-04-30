@@ -8,7 +8,7 @@ def parse_arguments(args=None):
                         default="rbc_data.pt")
     parser.add_argument("--min_mse",
                         type=int,
-                        default=1)
+                        default=float('inf'))
     parser.add_argument("--seed",
                         type=int,
                         default=53)
@@ -21,12 +21,6 @@ def parse_arguments(args=None):
     parser.add_argument("--input_length",
                         type=int,
                         default=26)
-    parser.add_argument("--gamma",
-                        type=float,
-                        default=0.9)
-    parser.add_argument("--learning_rate",
-                        type=float,
-                        default=0.001)
     parser.add_argument("--dropout_rate",
                         type=float,
                         default=0)
@@ -105,6 +99,21 @@ def parse_arguments(args=None):
                         type=float,
                         help="lr to start with the warmup",
                         default=1e-6)
+    
+    # optimizer args
+    parser.add_argument("--learning_rate",
+                        type=float,
+                        default=0.001)
+    parser.add_argument("--gamma",
+                        type=float,
+                        default=0.9)
+    parser.add_argument("--sch", 
+                        help="type of scheduler", 
+                        type = str, default='')
+    parser.add_argument("--tmax",
+                        type=int,
+                        default=100)
+    
     
     # mide lyapunov param
     parser.add_argument("--mide",
@@ -193,6 +202,10 @@ def parse_arguments(args=None):
                         action="store_true",
                         default=False,
                         help="use masking")
+    parser.add_argument("--mtype",
+                        help="masking type",
+                        choices=["random", "opt"],
+                        default="random")
     parser.add_argument("--mlower",
                         type=float,
                         help="lower bound of mask_ratio",
@@ -212,7 +225,19 @@ def parse_arguments(args=None):
     parser.add_argument("--mtile",
                         type=int,
                         help="tile_size",
-                        default = 4)
+                        default = 16)
+    parser.add_argument("--mwarmup",
+                        type=int,
+                        help="use full 100% masking until warmup to avoid learning bad interpolation functions",
+                        default = 0)
+    parser.add_argument("--mfloss",
+                        action="store_true",
+                        help="use loss on both predicted and unpredicted",
+                        default = False)
+    parser.add_argument("--mcurr",
+                        action="store_true",
+                        help="use masking for curriculum leanring",
+                        default = False)
     
     # positional embedding
     parser.add_argument("--pos_emb_dim",

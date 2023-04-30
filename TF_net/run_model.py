@@ -15,7 +15,7 @@ import time
 from model_addon import LES
 from torch.autograd import Variable
 from penalty import DivergenceLoss
-from train import Dataset, train_epoch, eval_epoch, test_epoch, preprocess, Scaler, EMA
+from train import Dataset, train_epoch, eval_epoch, test_epoch, preprocess, Scaler, customExpLR, EMA
 import warnings
 warnings.filterwarnings("ignore")
 import argparse
@@ -92,8 +92,12 @@ run.description = args.desc
 
 # aaply datset version
 args.data = args.data.replace(".pt", args.version + ".pt")
+if args.mask and args.mtype=='opt':
+    data_prep, opt_flow = preprocess(args, permute, compress, test_mode_train, True)
+else:
+    data_prep = preprocess(args, permute, compress, test_mode_train, False)
+    opt_flow = None
 
-data_prep = preprocess(args, permute, compress, test_mode_train)
 device_ids = args.d_ids
 device = torch.device(f"cuda:{device_ids[0]}" if torch.cuda.is_available() else "cpu")
 
@@ -179,10 +183,17 @@ optimizer = torch.optim.Adam([
                                 {'params': model.parameters()},
                                 {'params': ([] if m_pred is None else m_pred.parameters()), 'lr':1e-4, 'weight_decay':0.0}
                             ], learning_rate if not args.warm_up_epochs else args.warm_up_min_lr, betas = (0.9, 0.999), weight_decay = args.wt_decay)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = step_size, gamma = args.gamma)
 if args.warm_up_epochs > 0:
     warm_up_inc_rate = (learning_rate - args.warm_up_min_lr)/ args.warm_up_epochs
-
+    
+if args.sch == 'cosine':
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = args.tmax)
+elif args.sch == 'custom':
+    scheduler = customExpLR(optimizer, learning_rate, args.tmax, gamma = args.gamma)
+elif args.sch == '':
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = step_size, gamma = args.gamma)
+else:
+    raise ValueError("Unrecognized LR, recheck")
 
 train_mse = []
 train_reg = []
@@ -198,10 +209,11 @@ for i in range(args.epoch):
             grp['lr'] += warm_up_inc_rate
     else:
         scheduler.step()
+    print(i, optimizer.param_groups[0]['lr'])
 
     if i <= args.outln_steps:    
         output_length = min(int(outln_rate * i)*args.outln_stride + args.outln_init , args.output_length)
-        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, stack_x=True, test_mode_train=test_mode_train, noise=args.noise, do_not_scale_noise = args.dnsn)
+        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, stack_x=True, test_mode_train=test_mode_train, noise=args.noise, do_not_scale_noise = args.dnsn, opt_flow=opt_flow)
         train_loader = data.DataLoader(train_set, batch_size = batch_size, shuffle = True, num_workers = args.num_workers)
 
     ic_print(output_length)

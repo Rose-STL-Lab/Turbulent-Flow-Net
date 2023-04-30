@@ -11,6 +11,7 @@ import pandas as pd
 import os
 import time
 import pickle
+import argparse
 
 def load_and_delete_pred(f):
     temp = torch.load(f)
@@ -36,32 +37,37 @@ def get_files(files, thresh):
     return d.mean(axis=0), d.std(axis=0)
 
 # %%
-def evaluate(params):
+def evaluate_mask_opt(params):
 
     # Generate Results
     print(f"Running with params: {params}")
     d_id=0
     coef2=0
+    server="south"
     data="data9_101"
     mask="--mask"
-    mstart=params['mstart']
+    mstart=0
     mend=params['mend']
     mlower=round(params['mlower'],2)
+    lr=params['lr']
+    gamma=params['gamma']
     mupper=100
     epoch=100
-    mtile=16
+    mtile=1
     inplen=32
-    seed_arr=( "19","43","17","41","53")
-    d_id_arr=( "1","2","4","5","6" )
-    name=f"tfnet_{data}_mask_{mstart}_{mend}_{mlower}_{mupper}_{epoch}_{mtile}_inplen_{inplen}"
+    mtype="opt"
+    seed_arr=( "19","43","17","41")
+    d_id_arr=( "1","2","4","0" )
+    name=f"{server}_tfnet_{data}_mask_{mtype}_{mstart}_{mend}_{mlower}_{mupper}_{epoch}_{mtile}_inplen_{inplen}_lr_{lr}_gamma_{gamma}"
 
     ps=[]
     for seed, d_id in zip(seed_arr, d_id_arr):
         print(f"Running seed:{seed}, on d_id:{d_id}", flush=True)
         folder=f"{name}/{name}_{seed}"
+        print(f"folder:{folder}, seed: {seed}", flush=True)
         os.makedirs(f"results/{folder}", exist_ok=True)
-        cmd = f"(python TF_net/run_model.py --num_workers 1 --input_length {inplen} --data {data}.pt --desc {name} --coef 0 --coef2 {coef2} --seed {seed} --d_ids {d_id} --path results/{folder}/ \
-                         {mask} --mstart {mstart} --mend {mend} --mlower {mlower} --mupper {mupper} --epoch {epoch} --mtile {mtile} \
+        cmd = f"(python TF_net/run_model.py --learning_rate {lr} --gamma {gamma} --num_workers 1 --input_length {inplen} --data {data}.pt --desc {name} --coef 0 --coef2 {coef2} --seed {seed} --d_ids {d_id} --path results/{folder}/ \
+                         {mask} --mtype {mtype} --mstart {mstart} --mend {mend} --mlower {mlower} --mupper {mupper} --epoch {epoch} --mtile {mtile} \
                         2>&1 | tee results/{folder}/log.txt)"
         ps.append(subprocess.Popen(cmd, shell=True, close_fds=True, executable="/bin/bash"))
     for i,p in enumerate(ps):
@@ -69,7 +75,49 @@ def evaluate(params):
         print(f"seed:{seed_arr[i]} returned !", flush=True)
 
     # Get results
-    seeds = [43,41,53,17,19]
+    seeds = [43,41,17,19]
+    beta = 2.3853
+    thresh = float('inf')
+    test='_val'
+
+    check_seed = lambda x, _seeds: -1 in seeds or (int(x.rsplit("_", 1)[1]) in _seeds)
+    v = list(glob.glob("./results/" + name + "/*"))
+    v = [i + f"/results{test}.pt" for i in v if check_seed(i, seeds)]
+    results = get_files(v, thresh)
+    return {'mse': (results[0][-1], results[1][-1])}
+
+def evaluate_norm_loss(params):
+
+    # Generate Results
+    print(f"Running with params: {params}")
+    d_id=0
+    coef2=0
+    server="south"
+    data="data9_101"
+    norm_loss="--norm_loss"
+    lr=params['lr']
+    gamma=round(params['gamma'],4)
+    epoch=120
+    seed_arr=( "19","43","17","41")
+    d_id_arr=( "0","1","4","6" )
+    name=f"{server}_tfnet_{data}{norm_loss}_lr_{lr}_gamma_{gamma}_epoch_{epoch}"
+
+    ps=[]
+    for seed, d_id in zip(seed_arr, d_id_arr):
+        print(f"Running seed:{seed}, on d_id:{d_id}", flush=True)
+        folder=f"{name}/{name}_{seed}"
+        print(f"folder:{folder}, seed: {seed}", flush=True)
+        os.makedirs(f"results/{folder}", exist_ok=True)
+        cmd = f"(python TF_net/run_model.py {norm_loss} --epoch {epoch} --data {data}.pt --learning_rate {lr} --gamma {gamma} \
+                --desc {name} --coef 0 --coef2 {coef2} --seed {seed} --d_ids {d_id} --path results/{folder}/ \
+                        2>&1 | tee results/{folder}/log.txt)"
+        ps.append(subprocess.Popen(cmd, shell=True, close_fds=True, executable="/bin/bash"))
+    for i,p in enumerate(ps):
+        p.communicate()
+        print(f"seed:{seed_arr[i]} returned !", flush=True)
+
+    # Get results
+    seeds = [43,41,17,19]
     beta = 2.3853
     thresh = float('inf')
     test='_val'
@@ -86,28 +134,45 @@ ax_client.create_experiment(
     name="Lyapunov",
     parameters=[
         {
-            "name": "mstart",
+            "name": "lr",
             "type": "range",
-            "bounds": [0, 25],
-            "value_type": "int",  # Optional, defaults to inference from type of "bounds".
+            "bounds": [5e-4, 5e-3],
+            "value_type": "float",  # Optional, defaults to inference from type of "bounds".
+            "log_scale": True,  # Optional, defaults to False.
+        },
+        {
+            "name": "gamma",
+            "type": "range",
+            "bounds": [0.9, 0.96],
+            "value_type": "float",  # Optional, defaults to inference from type of "bounds".
             "log_scale": False,  # Optional, defaults to False.
         },
-        {
-            "name": "mend",
-            "type": "range",
-            "bounds": [40, 70],
-        },
-        {
-            "name": "mlower",
-            "type": "range",
-            "bounds": [70.0,90.0],
-        },
     ],
-    objectives={"mse": ObjectiveProperties(minimize=True)}
+    objectives={"mse": ObjectiveProperties(minimize=True)}  # This mse is just a reference name to return outputs to.
 )
 
-# evaluate({'mstart':0, 'mend':60, 'mlower':79.0054100058})
+parser = argparse.ArgumentParser()
+parser.add_argument("--rootdir",
+                    type=str)
+parser.add_argument("--task",
+                    type=str)
 
+
+args= parser.parse_args()
+rootdir=args.rootdir
+task=args.task
+if task not in ['mask_opt', 'norm_loss']:
+    raise ValueError("task not recognizied, check spelling!")
+if task == 'mask_opt':
+    evaluate = evaluate_mask_opt
+elif task == 'norm_loss':
+    evaluate = evaluate_norm_loss
+else:
+    raise ValueError("Shouldn't happen!")
+
+# evaluate({'lr': 1e-3, 'gamma': 0.97})
+
+os.makedirs(rootdir, exist_ok=True)
 results=[]
 for i in range(50):
     parameters, trial_index = ax_client.get_next_trial()
@@ -119,11 +184,11 @@ for i in range(50):
     results.append(parameters)
 
     print(ax_client.generation_strategy.trials_as_df)
-    ax_client.generation_strategy.trials_as_df.to_csv("./scripts/bayesian_opt/trials.csv")
+    ax_client.generation_strategy.trials_as_df.to_csv(rootdir+"trials.csv")
 
     print(ax_client.get_best_parameters())
-    with open("./scripts/bayesian_opt/best_parameters.pickle", 'wb') as handle:
+    with open(rootdir+"best_parameters.pickle", 'wb') as handle:
         pickle.dump(ax_client.get_best_parameters(), handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open("./scripts/bayesian_opt/results.pickle", 'wb') as handle:
+    with open(rootdir+"results.pickle", 'wb') as handle:
         pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 

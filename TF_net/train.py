@@ -16,6 +16,7 @@ import kornia
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
 from collections import deque
+import cv2 as cv
 
 class EMA:
     def __init__(self, _max = 5) -> None:
@@ -29,6 +30,25 @@ class EMA:
     
     def mean(self):
         return sum(self.Q) / len(self.Q)
+
+class customExpLR:
+    def __init__(self, optimizer, init_lr, tmax, gamma, restart_factor= 0.1) -> None:
+        self.init_lr = init_lr
+        self.optimizer = optimizer
+        self.tmax = tmax
+        self.gamma = gamma
+        self.restart_factor = restart_factor
+        
+    
+    def step(self, epoch) -> None:
+        if (epoch+1) % self.tmax == 0:
+            for grp in self.optimizer.param_groups:
+                self.init_lr = self.init_lr*self.restart_factor
+                grp['lr'] = self.init_lr*self.restart_factor
+        else:
+            for grp in self.optimizer.param_groups:
+                grp['lr'] *= self.gamma
+        return
 
 class Scaler:
     def __init__(self, type, offset=0, over_ch = True):
@@ -87,28 +107,33 @@ class Scaler:
         out = self.inv_fun(y * self.beta) + self.alpha
         return out if type(y) is not np.ndarray else out.numpy()
 
-def preprocess(args, permute = False, compress = True, test_mode=False):
+def preprocess(args, permute = False, compress = True, test_mode=False, get_opt_flow=False):
     data = torch.load(args.data)
+    if get_opt_flow: opt_flow = torch.load(args.data.replace('.pt','_opt_flow.pt'))
+
     if permute:
         data = torch.permute(data, (0, 3, 1, 2))
 
     if compress:
         data = data[:,:,::4,::4]
+        if get_opt_flow: opt_flow = opt_flow[:,:,::4,::4]
 
     data = args.transform.fit_transform(data)
 
     # divide each rectangular snapshot into 7 subregions
-    # data_prep shape: num_subregions * time * channels * w * h
+    # data shape: num_subregions * time * channels * w * h
     if not test_mode:
-        data_prep = torch.FloatTensor(torch.stack([data[:,:,:,k*64:(k+1)*64] for k in range(7)]))
-        #print(data_prep.shape)
-    else:
-        data_prep = torch.FloatTensor(data) # full domain
-    return data_prep
+        data = torch.stack([data[:,:,:,k*64:(k+1)*64] for k in range(7)])
+        if get_opt_flow: opt_flow = torch.stack([opt_flow[:,:,:,k*64:(k+1)*64] for k in range(7)])
+        #print(data.shape)
+    data = torch.FloatTensor(data) # full domain
+    if get_opt_flow: opt_flow = opt_flow.float()
+    if get_opt_flow: return data, opt_flow 
+    else: return data
 
 class Dataset(data.Dataset):
     def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, test_mode=False, test_mode_train=False, split_spatially=False,
-                    noise=0.0, do_not_scale_noise=False): # test_mode: full areas or not
+                    noise=0.0, do_not_scale_noise=False, opt_flow=None): # test_mode: full areas or not
         self.input_length = input_length
         self.mid = mid
         self.output_length = output_length
@@ -119,7 +144,8 @@ class Dataset(data.Dataset):
         self.noise = noise
         self.test_mode_train = test_mode_train
         self.do_not_scale_noise = do_not_scale_noise
-        
+        self.opt_flow = opt_flow
+
     def __len__(self):
         return len(self.list_IDs)
 
@@ -129,10 +155,17 @@ class Dataset(data.Dataset):
         #i = ID % 7
         if self.test_mode or self.test_mode_train:
             data_ = self.data_prep[j:j+100]#[i,j:j+100]
+            if self.opt_flow is not None: 
+                opt_flow_ = self.opt_flow[j:j+100]
         else:
             i = ID % 7
             data_ = self.data_prep[i,j:j+100]
+            if self.opt_flow is not None: 
+                opt_flow_ = self.opt_flow[i,j:j+100]
+
         y = data_[self.mid:(self.mid+self.output_length)]
+        if self.opt_flow is not None: opt_flow_ = opt_flow_[self.mid:(self.mid+self.output_length)]
+
         if self.stack_x:
             x = data_[(self.mid-self.input_length):self.mid].reshape(-1, y.shape[-2], y.shape[-1])
         else:
@@ -143,11 +176,12 @@ class Dataset(data.Dataset):
         else:
             x = x*(1 + self.noise*0.01*torch.randn_like(x))
         
-        return x.float(), y.float()
+        if self.opt_flow is not None: return x.float(), y.float(), opt_flow_
+        else: return x.float(), y.float()
     
-def mask_gen(epoch, start, end, lower, upper, tile_sz=4, image_sz=64):
+def mask_gen(epoch, start, end, lower, upper, warmup, tile_sz=4, image_sz=64):
     assert image_sz%tile_sz == 0    #code not tested for other cases
-    mask_ratio = 0.01*min(upper, max(lower, lower + ((upper-lower)*(epoch-start))/(end-start)))
+    mask_ratio = 1 if epoch < warmup else 0.01*min(upper, max(lower, lower + ((upper-lower)*(epoch-start))/(end-start)))
     iv,jv = [x.flatten() for x in np.meshgrid(np.arange(image_sz//tile_sz), np.arange(image_sz//tile_sz), indexing='ij')]
     mask_i = np.random.choice(len(iv), int(mask_ratio*len(iv)), replace=False)
 
@@ -157,6 +191,18 @@ def mask_gen(epoch, start, end, lower, upper, tile_sz=4, image_sz=64):
         mask[i:i+tile_sz,j:j+tile_sz] = 0
     # print(mask_ratio, (mask == 0).sum() / len(mask.flatten()))
     return mask
+
+def mask_gen_opt(epoch, opt_flow_mag, start, end, lower, upper, warmup, tile_sz=1, image_sz=64):
+    b,w,h = opt_flow_mag.shape
+    assert w==h==image_sz
+    assert tile_sz == 1 #at the moment only tile_sz 1 supported
+    assert image_sz%tile_sz == 0    #code not tested for other cases
+    mask_ratio = 1 if epoch < warmup else 0.01*min(upper, max(lower, lower + ((upper-lower)*(epoch-start))/(end-start)))
+    thresh = torch.quantile(opt_flow_mag.reshape((b,-1)), mask_ratio, dim=1).reshape((b,1,1))
+    mask = torch.ones_like(opt_flow_mag)
+    mask[opt_flow_mag <= thresh] = 0
+    # print(epoch, mask_ratio, (mask == 0).sum() / len(mask.flatten()))
+    return mask
     
 def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0, epoch=-1,barrier=1e2,mide=None,slope=None, 
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
@@ -165,7 +211,12 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
     train_mse = []
     train_reg = []
     training_data = tqdm(train_loader)
-    for _, (xx, yy) in enumerate(training_data):
+    for _, batch_data in enumerate(training_data):
+        if args.mask and args.mtype=='opt':
+            xx, yy, opt_flow = batch_data
+            opt_flow = opt_flow.transpose(0,1)
+        else:
+            xx, yy = batch_data
         loss = 0
         batch_reg = 0
         ims = []
@@ -174,14 +225,20 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         length = len(yy)
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
-        if args.mask:
-            predict_mask = mask_gen(epoch, args.mstart, args.mend, args.mlower, args.mupper, args.mtile).to(xx.device)
-            loss_mask = 1-predict_mask
-        else:
-            loss_mask = 1
 
         # Auto-regressive gen
-        for cur_t, y in enumerate(yy):
+        for cur_t, y in enumerate(yy): 
+            if args.mask:
+                if args.mtype=='random':
+                    predict_mask = mask_gen(epoch, args.mstart, args.mend, args.mlower, args.mupper, args.mtile).to(xx.device)
+                elif args.mtype=='opt':
+                    predict_mask = mask_gen_opt(epoch, opt_flow[cur_t], args.mstart, args.mend, args.mlower, args.mupper, args.mwarmup, args.mtile).to(xx.device)
+                    predict_mask = predict_mask.unsqueeze(dim=1)
+                loss_mask = 1 if args.mfloss else (1-predict_mask)
+                if args.mcurr:
+                    predict_mask = 0
+            else:
+                loss_mask = 1
             inp = torch.cat((xx[:,2:], y*predict_mask), 1) if args.mask else xx
             im = model(inp, tstep = cur_t if args.pos_emb else None)
             if args.teacher_forcing:
