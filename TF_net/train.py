@@ -22,7 +22,7 @@ from sklearn.mixture import GaussianMixture
 class EMA:
     def __init__(self, _max = 5) -> None:
         self.Q = deque()
-        self._max = 5
+        self._max = _max
 
     def append(self, x):
         if len(self.Q) > self._max:
@@ -323,7 +323,10 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         loss.backward()
         optimizer.step()
         if coef2 != 0:
-            training_data.set_postfix(epoch=epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v)
+            if log_c + relu_c > 0:
+                training_data.set_postfix(epoch=epoch,log_p=log_c/(log_c+relu_c),log_v=log_v,relu_v=relu_v)
+            else:
+                raise ValueError("Loss became NaN, probably!")
     train_mse = round(np.sqrt(np.mean(train_mse)),5)
     train_reg = round(np.mean(train_reg),5)
     return train_mse,train_reg
@@ -402,7 +405,8 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
             for cur_t, y in enumerate(yy.transpose(0,1)):
                 try:
                     inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
-                    im = model(inp, test_mode=test_mode, tstep = min(cur_t, args.output_length-1) if args.pos_emb else None)
+                    # im = model(inp, test_mode=test_mode, tstep = min(cur_t, args.output_length-1) if args.pos_emb else None)
+                    im = model(inp, test_mode=test_mode)
                 except TypeError as err:
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)

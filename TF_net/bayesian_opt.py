@@ -12,6 +12,7 @@ import os
 import time
 import pickle
 import argparse
+from functools import partial
 
 def load_and_delete_pred(f):
     temp = torch.load(f)
@@ -37,14 +38,13 @@ def get_files(files, thresh):
     return d.mean(axis=0), d.std(axis=0)
 
 # %%
-def evaluate_mask_opt(params):
+def evaluate_mask_opt(params, data):
 
     # Generate Results
     print(f"Running with params: {params}")
     d_id=0
     coef2=0
     server="south"
-    data="data9_101"
     mask="--mask"
     mstart=0
     mend=params['mend']
@@ -86,20 +86,19 @@ def evaluate_mask_opt(params):
     results = get_files(v, thresh)
     return {'mse': (results[0][-1], results[1][-1])}
 
-def evaluate_norm_loss(params):
+def evaluate_norm_loss(params, data):
 
     # Generate Results
     print(f"Running with params: {params}")
     d_id=0
     coef2=0
     server="south"
-    data="data9_101"
     norm_loss="--norm_loss"
     lr=params['lr']
     gamma=round(params['gamma'],4)
     epoch=120
     seed_arr=( "19","43","17","41")
-    d_id_arr=( "0","1","4","6" )
+    d_id_arr=( "7","1","4","6" )
     name=f"{server}_tfnet_{data}{norm_loss}_lr_{lr}_gamma_{gamma}_epoch_{epoch}"
 
     ps=[]
@@ -128,22 +127,68 @@ def evaluate_norm_loss(params):
     results = get_files(v, thresh)
     return {'mse': (results[0][-1], results[1][-1])}
 
+def evaluate_lyapunov(params, data, max_mse=4.0):
+    # Generate Results
+    print(f"Running with params: {params}")
+    params['m_val'] = round(params['m_val'], 4)
+    d_id=0
+    coef2=1
+    server="north"
+    slope=150
+    if params['m_learnt']:
+        m_str_name='m_learnt'
+        m_str_args=f"--m_init {params['m_val']}"
+    else:
+        m_str_name='m'
+        m_str_args=f"--mide {params['m_val']}"
+    seed_arr=( "19","43","17","41")
+    d_id_arr=( "0","1","4","6" )
+    name=f"{server}_lya_{data}_coef2_{coef2}_{m_str_name}_{params['m_val']}_s_{slope}"
+
+    ps=[]
+    for seed, d_id in zip(seed_arr, d_id_arr):
+        print(f"Running seed:{seed}, on d_id:{d_id}", flush=True)
+        folder=f"{name}/{name}_{seed}"
+        print(f"folder:{folder}, seed: {seed}", flush=True)
+        os.makedirs(f"results/{folder}", exist_ok=True)
+        cmd = f"(python TF_net/run_model.py --coef2 {coef2} --desc {name} --slope {slope} {m_str_args} --data {data}.pt --seed {seed} --d_ids {d_id} \
+                        --path results/{folder}/ 2>&1 | tee results/{folder}/log.txt)"
+        ps.append(subprocess.Popen(cmd, shell=True, close_fds=True, executable="/bin/bash"))
+    for i,p in enumerate(ps):
+        p.communicate()
+        print(f"seed:{seed_arr[i]} returned !", flush=True)
+
+    # Get results
+    seeds = [43,41,17,19]
+    beta = 2.3853
+    thresh = float('inf')
+    test='_val'
+    try:
+        check_seed = lambda x, _seeds: -1 in seeds or (int(x.rsplit("_", 1)[1]) in _seeds)
+        v = list(glob.glob("./results/" + name + "/*"))
+        v = [i + f"/results{test}.pt" for i in v if check_seed(i, seeds)]
+        results = get_files(v, thresh)
+        return {'mse': (results[0][-1], results[1][-1])}
+    except FileNotFoundError:
+        return {'mse': (max_mse, 0.00001)}
+
 # %%
+# Ref: https://ax.dev/api/_modules/ax/service/ax_client.html#AxClient.create_experiment
 ax_client = AxClient()
 ax_client.create_experiment(
     name="Lyapunov",
     parameters=[
         {
-            "name": "lr",
-            "type": "range",
-            "bounds": [5e-4, 5e-3],
-            "value_type": "float",  # Optional, defaults to inference from type of "bounds".
-            "log_scale": True,  # Optional, defaults to False.
+            "name": "m_learnt",
+            "type": "choice",
+            "values": [True, False],
+            "value_type": "bool",  # Optional, defaults to inference from type of "bounds".
+            "is_ordered": False,
         },
         {
-            "name": "gamma",
+            "name": "m_val",
             "type": "range",
-            "bounds": [0.9, 0.96],
+            "bounds": [0.2, 0.6],
             "value_type": "float",  # Optional, defaults to inference from type of "bounds".
             "log_scale": False,  # Optional, defaults to False.
         },
@@ -156,21 +201,30 @@ parser.add_argument("--rootdir",
                     type=str)
 parser.add_argument("--task",
                     type=str)
+parser.add_argument("--data",
+                    type=str)
+parser.add_argument("--max_mse",
+                    type=float,
+                    help="default mse if run fails, used for lyapunov")
 
 
 args= parser.parse_args()
 rootdir=args.rootdir
 task=args.task
-if task not in ['mask_opt', 'norm_loss']:
+
+if task not in ['mask_opt', 'norm_loss', 'lyapunov']:
     raise ValueError("task not recognizied, check spelling!")
 if task == 'mask_opt':
     evaluate = evaluate_mask_opt
 elif task == 'norm_loss':
     evaluate = evaluate_norm_loss
+elif task == 'lyapunov':
+    evaluate = partial(evaluate_lyapunov, max_mse=args.max_mse)
 else:
     raise ValueError("Shouldn't happen!")
+evaluate = partial(evaluate, data=args.data)
 
-# evaluate({'lr': 1e-3, 'gamma': 0.97})
+# evaluate({'m_learnt': True, 'm_val': 0.4})
 
 os.makedirs(rootdir, exist_ok=True)
 results=[]
