@@ -245,7 +245,7 @@ def parse_arguments(args=None):
                         type=int,
                         help="use positional embedding for time, with provided dim")
     
-    #truncate loss idea
+    # truncate loss idea
     parser.add_argument("--trunc",
                         type=int,
                         help="the output length at which a 'max_loss' param is recorded and all the future values higher that that are ignored.",
@@ -254,5 +254,17 @@ def parse_arguments(args=None):
                         type=float,
                         help="factor mult to trunc thresh",
                         default=0.7)
+    
+    # loss decay
+    parser.add_argument("--beta",
+                        type=float,
+                        help="the output length at which a 'max_loss' param is recorded and all the future values higher that that are ignored.",
+                        default=1)
+    
+    # gmm params
+    parser.add_argument("--gmm_comp",
+                        type=int,
+                        help="Number of components used for GMM, GMM only used if gmm_comp > 0",
+                        default=0)
 
     return parser.parse_args(args=args)

@@ -17,6 +17,7 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore")
 from collections import deque
 import cv2 as cv
+from sklearn.mixture import GaussianMixture
 
 class EMA:
     def __init__(self, _max = 5) -> None:
@@ -203,6 +204,23 @@ def mask_gen_opt(epoch, opt_flow_mag, start, end, lower, upper, warmup, tile_sz=
     mask[opt_flow_mag <= thresh] = 0
     # print(epoch, mask_ratio, (mask == 0).sum() / len(mask.flatten()))
     return mask
+
+# Works with both torch
+class GMM:
+    def __init__(self, loss, n_comps):
+        loss = loss.reshape((-1,1))
+        self.gmm = GaussianMixture(n_components=n_comps, random_state=0, init_params='k-means++').fit(loss.cpu().detach())
+        self.means_ = self.gmm.means_
+        self.covariances_ = self.gmm.covariances_
+        self.ndx = np.argmax(self.gmm.means_, axis=0)[0]
+
+    def convert(self, loss):
+        shp = loss.shape
+        loss = loss.reshape((-1,1))
+        probs=1-self.gmm.predict_proba(loss.cpu().detach())[:,self.ndx]
+        # print("fraction of probs > 0.001: ", 100*((np.sum(probs > 0.1)) / len(probs)))
+        loss = loss*torch.tensor(probs[:,None]).to(loss.device)
+        return loss.reshape(shp)
     
 def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= None, coef = 0, regularizer = None, coef2=1.0, epoch=-1,barrier=1e2,mide=None,slope=None, 
                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
@@ -211,7 +229,9 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
     train_mse = []
     train_reg = []
     training_data = tqdm(train_loader)
-    for _, batch_data in enumerate(training_data):
+    gmm = None
+    gmm_train_batch = lambda x: (x==0)
+    for batch_idx, batch_data in enumerate(training_data):
         if args.mask and args.mtype=='opt':
             xx, yy, opt_flow = batch_data
             opt_flow = opt_flow.transpose(0,1)
@@ -222,7 +242,8 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         ims = []
         xx = xx.to(device) # [batch,time,width,height]
         yy = yy.to(device).transpose(0,1)
-        length = len(yy)
+        length = len(yy) if args.trunc > len(yy) else args.trunc
+        norm_trunc = len(yy) - args.trunc + 1
         prev_lya = None # for approximating dV/dt~V(t+1)-V(t)
         pred_losses = []
 
@@ -248,16 +269,24 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
             pred_loss = (loss_function(im, y)*loss_mask)
             if cur_t == args.trunc-1:
                 trunc_thresh = torch.max(pred_loss)
+                trunc_pred_loss_mean = pred_loss.mean().clone().detach()
+                pred_loss /= norm_trunc
             elif cur_t >= args.trunc:
                 about_to_cut = torch.sum(pred_loss > trunc_thresh*args.trunc_factor)
                 pred_loss[pred_loss > trunc_thresh*args.trunc_factor] = 0
+                pred_loss = pred_loss * (trunc_pred_loss_mean/pred_loss.mean())
+                pred_loss /= norm_trunc
+            if args.gmm_comp > 0 and gmm is not None:
+                pred_loss = gmm.convert(pred_loss)
+            if gmm_train_batch(batch_idx):
+                pred_losses.append(pred_loss[0])    # Only first element of first batch is used for training
             pred_loss = pred_loss.mean()
+            pred_loss *= args.beta**cur_t
             lya_val = lyapunov_func(im,y)  # (Batch, )
             if coef != 0:
                 loss += pred_loss + coef*regularizer(im, y)
             else:
                 loss += pred_loss
-            pred_losses.append(pred_loss.item())
                 
             if coef2 != 0 and prev_lya != None:
                 # dV_dt = torch.nn.functional.relu(lya_val - prev_lya)
@@ -281,6 +310,8 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
             ims.append(im.cpu().data.numpy())
             
             prev_lya = lya_val
+        if (args.gmm_comp > 0) and gmm_train_batch(batch_idx):
+            gmm = GMM(torch.stack(pred_losses), args.gmm_comp)
         ims = np.concatenate(ims, axis = 1)
         train_mse.append(loss.item()/length) 
         train_reg.append(batch_reg/length)

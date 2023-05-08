@@ -1,0 +1,9 @@
+,Generation Step,Generation Model,Trial Index,Trial Status,Arm Parameterizations
+0,0,Sobol,0,COMPLETED,"{'0_0': {'lr': 0.0, 'gamma': 0.94, 'mend': 68, 'mlower': 94}}"
+1,0,Sobol,1,COMPLETED,"{'1_0': {'lr': 0.0, 'gamma': 0.95, 'mend': 67, 'mlower': 93}}"
+2,0,Sobol,2,COMPLETED,"{'2_0': {'lr': 0.0, 'gamma': 0.91, 'mend': 51, 'mlower': 95}}"
+3,0,Sobol,3,COMPLETED,"{'3_0': {'lr': 0.0, 'gamma': 0.92, 'mend': 54, 'mlower': 90}}"
+4,0,Sobol,4,COMPLETED,"{'4_0': {'lr': 0.0, 'gamma': 0.92, 'mend': 34, 'mlower': 94}}"
+5,0,Sobol,5,COMPLETED,"{'5_0': {'lr': 0.0, 'gamma': 0.91, 'mend': 56, 'mlower': 90}}"
+6,0,Sobol,6,COMPLETED,"{'6_0': {'lr': 0.0, 'gamma': 0.93, 'mend': 40, 'mlower': 91}}"
+7,0,Sobol,7,COMPLETED,"{'7_0': {'lr': 0.0, 'gamma': 0.94, 'mend': 56, 'mlower': 95}}"
