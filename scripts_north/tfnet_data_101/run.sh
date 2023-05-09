@@ -6,7 +6,7 @@ coef2=0
 server=north
 
 array=( "19" "43" "17" "41" )
-array2=( "1" "4" "6" "7" )
+array2=( "1" "4" "3" "6" )
 for data in data9_101 ; do
     for i in "${!array[@]}"; do
         seed="${array[i]}" 

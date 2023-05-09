@@ -232,7 +232,7 @@ for i in range(args.epoch):
 
     ema_mse.append(valid_mse[-1])
     if ema_mse.mean() < min_mse:
-        print("new_min_mse, epoch: ", i)
+        print(f"new_min_mse: {ema_mse.mean()}, epoch: {i}, seed: {args.seed}")
         min_mse = ema_mse.mean() 
         torch.save(model, args.path+"model.pth")
         torch.save(model.module.state_dict(), args.path+"module_stdict.pth")

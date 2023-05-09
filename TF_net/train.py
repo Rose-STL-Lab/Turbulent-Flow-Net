@@ -25,7 +25,7 @@ class EMA:
         self._max = _max
 
     def append(self, x):
-        if len(self.Q) > self._max:
+        if len(self.Q) >= self._max:
             self.Q.popleft()
         self.Q.append(x)
     
