@@ -205,19 +205,21 @@ def mask_gen_opt(epoch, opt_flow_mag, start, end, lower, upper, warmup, tile_sz=
     # print(epoch, mask_ratio, (mask == 0).sum() / len(mask.flatten()))
     return mask
 
-# Works with both torch
 class GMM:
-    def __init__(self, loss, n_comps):
+    def __init__(self, loss, n_comps, means_init=None, ignore_min2=False):
         loss = loss.reshape((-1,1))
-        self.gmm = GaussianMixture(n_components=n_comps, random_state=0, init_params='k-means++').fit(loss.cpu().detach())
+        self.gmm = GaussianMixture(n_components=n_comps, random_state=0, init_params='k-means++', means_init=means_init).fit(loss.cpu().detach())
         self.means_ = self.gmm.means_
         self.covariances_ = self.gmm.covariances_
-        self.ndx = np.argmax(self.gmm.means_, axis=0)[0]
+        self.max_ndx = np.argmax(self.gmm.means_, axis=0)[0]
+        self.min_ndx = np.argmin(self.gmm.means_, axis=0)[0]
+        self.ignore_min2 = ignore_min2
 
     def convert(self, loss):
         shp = loss.shape
         loss = loss.reshape((-1,1))
-        probs=1-self.gmm.predict_proba(loss.cpu().detach())[:,self.ndx]
+        detached_loss = loss.cpu().detach()
+        probs=1 - self.gmm.predict_proba(detached_loss)[:,self.max_ndx] - (self.gmm.predict_proba(detached_loss)[:,self.min_ndx] if self.ignore_min2 else 0)
         # print("fraction of probs > 0.001: ", 100*((np.sum(probs > 0.1)) / len(probs)))
         loss = loss*torch.tensor(probs[:,None]).to(loss.device)
         return loss.reshape(shp)
@@ -281,7 +283,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
             if gmm_train_batch(batch_idx):
                 pred_losses.append(pred_loss[0])    # Only first element of first batch is used for training
             pred_loss = pred_loss.mean()
-            pred_loss *= args.beta**cur_t
+            pred_loss = pred_loss * args.beta**cur_t
             lya_val = lyapunov_func(im,y)  # (Batch, )
             if coef != 0:
                 loss += pred_loss + coef*regularizer(im, y)
@@ -311,7 +313,8 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
             
             prev_lya = lya_val
         if (args.gmm_comp > 0) and gmm_train_batch(batch_idx):
-            gmm = GMM(torch.stack(pred_losses), args.gmm_comp)
+            gmm = GMM(torch.stack(pred_losses), args.gmm_comp, means_init = None if gmm is None else gmm.means_, \
+                      ignore_min2=args.ignore_min2 if epoch > args.ignore_min2_epoch else False)
         ims = np.concatenate(ims, axis = 1)
         train_mse.append(loss.item()/length) 
         train_reg.append(batch_reg/length)

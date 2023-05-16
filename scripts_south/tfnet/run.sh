@@ -5,20 +5,21 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 d_id=0
 coef2=0
 server=south
+outln=8
 
 array=( "17" "19" "41" "43" )
 array2=( "0" "1" "6" "7" )
-for dsfs in -1 ; do
+for beta in 0.7 0.6 0.5 ; do
     for tfdsfsd in 9; do
         for i in "${!array[@]}"; do
             seed="${array[i]}" 
             d_id="${array2[i]}"
             echo $seed $d_id $trunc_factor
-            name=${server}_tfnet
+            name=${server}_tfnet_outln_${outln}_beta_${beta}
             folder=${name}/${name}_${seed}
             mkdir -p results/$folder
             cp -v ${BASH_SOURCE[0]} results/$folder/
-            python TF_net/run_model.py --desc $name --coef 0 --coef2 $coef2 --seed ${seed} --d_ids $d_id --path results/$folder/ \
+            python TF_net/run_model.py --output_length ${outln} --beta ${beta} --desc $name --coef 0 --coef2 $coef2 --seed ${seed} --d_ids $d_id --path results/$folder/ \
                         2>&1 | tee results/$folder/log.txt &
         done
         wait

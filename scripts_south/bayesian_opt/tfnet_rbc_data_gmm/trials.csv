@@ -1,0 +1,2 @@
+,Generation Step,Generation Model,Trial Index,Trial Status,Arm Parameterizations
+0,0,Sobol,0,COMPLETED,"{'0_0': {'gmm_comp': 7, 'lr': 0.0, 'gamma': 0.92}}"

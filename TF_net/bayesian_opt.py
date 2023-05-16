@@ -127,6 +127,86 @@ def evaluate_norm_loss(params, data):
     results = get_files(v, thresh)
     return {'mse': (results[0][-1], results[1][-1])}
 
+def evaluate_norm_loss(params, data):
+
+    # Generate Results
+    print(f"Running with params: {params}")
+    d_id=0
+    coef2=0
+    server="south"
+    norm_loss="--norm_loss"
+    lr=round(params['lr'],8)
+    gamma=round(params['gamma'],4)
+    epoch=120
+    seed_arr=( "19","43","17","41")
+    d_id_arr=( "7","1","4","6" )
+    name=f"{server}_tfnet_{data}{norm_loss}_lr_{lr}_gamma_{gamma}_epoch_{epoch}"
+
+    ps=[]
+    for seed, d_id in zip(seed_arr, d_id_arr):
+        print(f"Running seed:{seed}, on d_id:{d_id}", flush=True)
+        folder=f"{name}/{name}_{seed}"
+        print(f"folder:{folder}, seed: {seed}", flush=True)
+        os.makedirs(f"results/{folder}", exist_ok=True)
+        cmd = f"(python TF_net/run_model.py {norm_loss} --epoch {epoch} --data {data}.pt --learning_rate {lr} --gamma {gamma} \
+                --desc {name} --coef 0 --coef2 {coef2} --seed {seed} --d_ids {d_id} --path results/{folder}/ \
+                        2>&1 | tee results/{folder}/log.txt)"
+        ps.append(subprocess.Popen(cmd, shell=True, close_fds=True, executable="/bin/bash"))
+    for i,p in enumerate(ps):
+        p.communicate()
+        print(f"seed:{seed_arr[i]} returned !", flush=True)
+
+    # Get results
+    seeds = [43,41,17,19]
+    beta = 2.3853
+    thresh = float('inf')
+    test='_val'
+
+    check_seed = lambda x, _seeds: -1 in seeds or (int(x.rsplit("_", 1)[1]) in _seeds)
+    v = list(glob.glob("./results/" + name + "/*"))
+    v = [i + f"/results{test}.pt" for i in v if check_seed(i, seeds)]
+    results = get_files(v, thresh)
+    return {'mse': (results[0][-1], results[1][-1])}
+
+def evaluate_gmm(params, data):
+    # Generate Results
+    print(f"Running with params: {params}")
+    d_id=0
+    coef2=0
+    server="south"
+    lr=round(params['lr'],8)
+    gamma=round(params['gamma'],4)
+    gmm_comp = params['gmm_comp']
+    seed_arr=( "19","43","17","41")
+    d_id_arr=( "2","5","4","7" )
+    name=f"{server}_tfnet_{data}_gmm_comp_{gmm_comp}_lr_{lr}_gamma_{gamma}"
+
+    ps=[]
+    for seed, d_id in zip(seed_arr, d_id_arr):
+        print(f"Running seed:{seed}, on d_id:{d_id}", flush=True)
+        folder=f"{name}/{name}_{seed}"
+        print(f"folder:{folder}, seed: {seed}", flush=True)
+        os.makedirs(f"results/{folder}", exist_ok=True)
+        cmd = f"(python TF_net/run_model.py --gmm_comp {gmm_comp} --data {data}.pt --learning_rate {lr} --gamma {gamma} \
+                --desc {name} --coef 0 --coef2 {coef2} --seed {seed} --d_ids {d_id} --path results/{folder}/ \
+                        2>&1 | tee results/{folder}/log.txt)"
+        ps.append(subprocess.Popen(cmd, shell=True, close_fds=True, executable="/bin/bash"))
+    for i,p in enumerate(ps):
+        p.communicate()
+        print(f"seed:{seed_arr[i]} returned !", flush=True)
+
+    # Get results
+    seeds = [43,41,17,19]
+    beta = 2.3853
+    thresh = float('inf')
+    test='_val'
+
+    check_seed = lambda x, _seeds: -1 in seeds or (int(x.rsplit("_", 1)[1]) in _seeds)
+    v = list(glob.glob("./results/" + name + "/*"))
+    v = [i + f"/results{test}.pt" for i in v if check_seed(i, seeds)]
+    results = get_files(v, thresh)
+    return {'mse': (results[0][-1], results[1][-1])}
+
 def evaluate_lyapunov(params, data, max_mse=4.0):
     # Generate Results
     print(f"Running with params: {params}")
@@ -179,16 +259,23 @@ ax_client.create_experiment(
     name="Lyapunov",
     parameters=[
         {
-            "name": "m_learnt",
-            "type": "fixed",
-            "value": True,
-            "value_type": "bool",  # Optional, defaults to inference from type of "bounds".
+            "name": "gmm_comp",
+            "type": "range",
+            "bounds": [4, 7],
+            "value_type": "int",  # Optional, defaults to inference from type of "bounds".
             "is_ordered": False,
         },
         {
-            "name": "m_val",
+            "name": "lr",
             "type": "range",
-            "bounds": [0.2, 0.6],
+            "bounds": [5e-4, 2e-3],
+            "value_type": "float",  # Optional, defaults to inference from type of "bounds".
+            "log_scale": False,  # Optional, defaults to False.
+        },
+        {
+            "name": "gamma",
+            "type": "range",
+            "bounds": [0.9, 0.96],
             "value_type": "float",  # Optional, defaults to inference from type of "bounds".
             "log_scale": False,  # Optional, defaults to False.
         },
@@ -212,14 +299,17 @@ args= parser.parse_args()
 rootdir=args.rootdir
 task=args.task
 
-if task not in ['mask_opt', 'norm_loss', 'lyapunov']:
+task_opts = ['mask_opt', 'norm_loss', 'lyapunov','gmm']
+if task not in task_opts:
     raise ValueError("task not recognizied, check spelling!")
-if task == 'mask_opt':
+if task == task_opts[0]:
     evaluate = evaluate_mask_opt
-elif task == 'norm_loss':
+elif task == task_opts[1]:
     evaluate = evaluate_norm_loss
-elif task == 'lyapunov':
+elif task == task_opts[2]:
     evaluate = partial(evaluate_lyapunov, max_mse=args.max_mse)
+elif task == task_opts[3]:
+    evaluate = partial(evaluate_gmm)
 else:
     raise ValueError("Shouldn't happen!")
 evaluate = partial(evaluate, data=args.data)
