@@ -9,7 +9,7 @@ version=""
 server=north
 
 array=( "19" "43" "17" "41" )
-array2=( "1" "4" "0" "6" )
+array2=( "5" "6" "7" "0" )
 for m_init in 0.4; do
     for i in "${!array[@]}"; do
         seed="${array[i]}" 

@@ -142,7 +142,7 @@ def evaluate_lyapunov(params, data, max_mse=4.0):
         m_str_name='m'
         m_str_args=f"--mide {params['m_val']}"
     seed_arr=( "19","43","17","41")
-    d_id_arr=( "0","1","4","6" )
+    d_id_arr=( "1","2","3","4" )
     name=f"{server}_lya_{data}_coef2_{coef2}_{m_str_name}_{params['m_val']}_s_{slope}"
 
     ps=[]
@@ -180,8 +180,8 @@ ax_client.create_experiment(
     parameters=[
         {
             "name": "m_learnt",
-            "type": "choice",
-            "values": [True, False],
+            "type": "fixed",
+            "value": True,
             "value_type": "bool",  # Optional, defaults to inference from type of "bounds".
             "is_ordered": False,
         },

@@ -77,7 +77,8 @@ def parse_arguments(args=None):
                         default=False)
     parser.add_argument("--version",
                         type=str,
-                        help="dataset version to used, this version is used for testing, while training is done on some other version of dataset",
+                        help=f"""dataset version to used, this version is used for testing, while training is done on some other version of dataset,
+                                _mixed, for mixed evaluation, _mixed_no_overalap, _2: dataset with input hose shifted slightly, _3: larger size dataset 14000""",
                         nargs="?",
                         const="",
                         default="")
