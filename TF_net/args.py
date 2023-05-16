@@ -266,5 +266,13 @@ def parse_arguments(args=None):
                         type=int,
                         help="Number of components used for GMM, GMM only used if gmm_comp > 0",
                         default=0)
+    parser.add_argument("--ignore_min2",
+                        action='store_true',
+                        help="After 8 epochs, Ignore the min mean component as well",
+                        default=False)
+    parser.add_argument("--ignore_min2_epoch",
+                        type=int,
+                        help="After this many epochs, Ignore the min mean component as well",
+                        default=8)
 
     return parser.parse_args(args=args)

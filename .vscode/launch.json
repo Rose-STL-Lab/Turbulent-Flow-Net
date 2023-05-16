@@ -12,7 +12,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--d_ids", "5", "--epoch", "5", "--data", "data9_101.pt", "--coef2", "0", "--gmm_comp", "3"],
+            "args": ["--d_ids", "5", "--epoch", "5", "--seed", "17", "--output_length", "6", "--coef2", "0", "--beta", "0.8"],
             "justMyCode": true,
             "env": {
                 "CUBLAS_WORKSPACE_CONFIG":":4096:8"
