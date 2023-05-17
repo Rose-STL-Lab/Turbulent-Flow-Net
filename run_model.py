@@ -14,7 +14,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 train_direc = "rbc_data/sample_"
 test_direc = "rbc_data/sample_"
 
-parser = argparse.ArgumentParser(description='Approximately Equivariant CNNs')
+parser = argparse.ArgumentParser(description='Tuburlent-Flow Nets')
 parser.add_argument('--kernel_size', type=int, required=False, default="3", help='convolution kernel size')
 parser.add_argument('--time_range', type=int, required=False, default="6", help='moving average window size for temporal filter')
 parser.add_argument('--output_length', type=int, required=False, default="4", help='number of prediction losses used for backpropagation')
