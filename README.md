@@ -49,7 +49,7 @@ python data_gen.py
 ### Training
 - Train TF-Net.
 ```
-CUDA_VISIBLE_DEVICES=0 python3 run_model.py --time_range=6 --output_length=6 --input_length=26 --batch_size=64 --learning_rate=0.005 --decay_rate=0.9 --coef=0.001 --seed=0
+python3 run_model.py --time_range=6 --output_length=6 --input_length=26 --batch_size=64 --learning_rate=0.005 --decay_rate=0.9 --coef=0.001 --seed=0
 ```
 
 ## Cite
