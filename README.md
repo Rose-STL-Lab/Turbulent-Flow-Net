@@ -20,12 +20,12 @@ While deep learning has shown tremendous success in a wide range of domains, it 
 1. run_model.py : script to train TF-Net
 2. models/: 
    1. baselines: six baseline modules included in the paper.
-   2. penalty.py: Divergence-free regularizer.
-   3. model.py: Pytorch implementation of TF-Net
+   2. penalty.py: divergence-free regularizer.
+   3. model.py: pytorch implementation of TF-Net
 3. utils:
    1. train_utils.py: data loaders, train epoch, validation epoch, test epoch functions
    2. eval_utils.py: evaluation functions for computing divergence and energy spectrum. 
-4. notebooks: Code to generate plots in the paper.
+4. notebooks: code to generate plots in the paper.
 5. videos: videos of velocity u, v predictions and ablation study.
 
 
