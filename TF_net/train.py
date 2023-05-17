@@ -408,8 +408,7 @@ def test_epoch(args, test_loader, model, loss_function,test_mode=True, save_pred
             for cur_t, y in enumerate(yy.transpose(0,1)):
                 try:
                     inp = torch.cat((xx[:,2:], torch.zeros_like(y)), 1) if args.mask else xx
-                    # im = model(inp, test_mode=test_mode, tstep = min(cur_t, args.output_length-1) if args.pos_emb else None)
-                    im = model(inp, test_mode=test_mode)
+                    im = model(inp, test_mode=test_mode, tstep = min(cur_t, args.output_length-1) if args.pos_emb else None)
                 except TypeError as err:
                     tqdm.write(f"{xx.shape}")
                     raise TypeError(err)
