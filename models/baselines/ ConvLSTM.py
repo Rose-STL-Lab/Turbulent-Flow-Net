@@ -1,8 +1,8 @@
+###### Convolutional LSTM ##########
+# Shi, Xingjian et al. Convolutional LSTM network: A machine learning approach for precipitation nowcasting, NeurIPS 2015.
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils import data
 from torch.autograd import Variable
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     

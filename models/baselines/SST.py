@@ -1,24 +1,19 @@
-from __future__ import unicode_literals, print_function, division
+##### Adapt warping scheme in (Emmanuel de Bezenac et al 2018) to Naiver-Stokes Equations #####
+# use two Unets and warping schemes for velocity x and y separately. 
+# Emmanuel de Bezenac et al. Deep Learning for Physical Processes: Incorporating Prior Scientific Knowledge, ICLR 2018.
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from torch.utils import data
-import itertools
-import re
-import random
-import time
 import losses as losses
-from torch.autograd import Variable
 from train import train_epoch, eval_epoch, test_epoch, Dataset
 from warp import GaussianWarpingScheme
-import os
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-import warnings
-warnings.filterwarnings("ignore")
+
+
 def conv(in_planes, output_channels, kernel_size, stride, dropout_rate):
     return nn.Sequential(
         nn.Conv2d(in_planes, output_channels, kernel_size=kernel_size,
@@ -144,7 +139,7 @@ train_mse = []
 valid_mse = []
 test_mse = []
 
-for i in range(100):
+for i in range(1000):
     start = time.time()
     scheduler_x.step()
     scheduler_y.step()
@@ -155,14 +150,20 @@ for i in range(100):
     warp_y.train()
 
 
-    train_mse.append(train_epoch(train_loader, model_x, model_y, warp_x, warp_y,  
-                                 optimizer_x, optimizer_y, div_coef, loss_functions))
+    train_mse.append(train_epoch(train_loader,
+                                 model_x, model_y, 
+                                 warp_x, warp_y,  
+                                 optimizer_x, optimizer_y, 
+                                 div_coef, loss_functions))
     model_x.eval()
     warp_x.eval()
     model_y.eval()
     warp_y.eval()
 
-    mse, preds, trues = eval_epoch(valid_loader, model_x, model_y, warp_x, warp_y, photo_loss)
+    mse, preds, trues = eval_epoch(valid_loader, 
+                                   model_x, model_y, 
+                                   warp_x, warp_y, 
+                                   photo_loss)
     valid_mse.append(mse)
     if valid_mse[-1] < min_mse:
         min_mse = valid_mse[-1] 
@@ -174,4 +175,3 @@ for i in range(100):
     if (len(train_mse) > 50 and np.mean(valid_mse[-5:]) >= np.mean(valid_mse[-10:-5])):
             break
             
-print(input_length, min_mse)

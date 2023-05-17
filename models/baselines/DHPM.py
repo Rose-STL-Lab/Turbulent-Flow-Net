@@ -1,16 +1,12 @@
-# Deep Hidden Physics Model For Navier-Stokes Equation
+###### Physics-Informed Neural Nets For Navier-Stokes Equation ######
+# Maziar et al. Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations, Journal of Computational physics 2019
+
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from torch.utils import data
 from torch import autograd 
 from torch.autograd import Variable
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class NN(nn.Module):
     def __init__(self, hidden_dim, input_dim, output_dim, num_layers):
