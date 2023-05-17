@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 ## Instructions
 ### Dataset and Preprocessing
-- Download rbc_data.pt from [seafile]([https://drive.google.com/drive/folders/1VOtLjfAkCWJePiacoDxC-nrgCREKvrpE?usp=sharing.](https://roselab1.ucsd.edu/seafile/d/0d2aa58e608344238409/))
+- Download rbc_data.pt from [seafile](https://roselab1.ucsd.edu/seafile/d/0d2aa58e608344238409/)
 
 - run data_prep.py to preprocess the raw data and all samples will be saved in the "rbc_data" folder
 ```
