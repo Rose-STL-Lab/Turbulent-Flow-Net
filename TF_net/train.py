@@ -134,7 +134,7 @@ def preprocess(args, permute = False, compress = True, test_mode=False, get_opt_
 
 class Dataset(data.Dataset):
     def __init__(self, indices, input_length, mid, output_length, data_prep, stack_x, test_mode=False, test_mode_train=False, split_spatially=False,
-                    noise=0.0, do_not_scale_noise=False, opt_flow=None): # test_mode: full areas or not
+                    noise=0.0, do_not_scale_noise=False, opt_flow=None, args={},_type='train'): # test_mode: full areas or not
         self.input_length = input_length
         self.mid = mid
         self.output_length = output_length
@@ -146,6 +146,9 @@ class Dataset(data.Dataset):
         self.test_mode_train = test_mode_train
         self.do_not_scale_noise = do_not_scale_noise
         self.opt_flow = opt_flow
+        self.args = args
+        self.type=_type
+        assert _type in ["train","test","val"]
 
     def __len__(self):
         return len(self.list_IDs)
@@ -176,6 +179,11 @@ class Dataset(data.Dataset):
             x = x + self.noise*0.01*torch.randn_like(x)
         else:
             x = x*(1 + self.noise*0.01*torch.randn_like(x))
+
+        if (self.args.dfusn_alpha != 1) and self.type=='train':
+            exp = torch.arange(len(y))
+            alpha_p = torch.pow(self.args.dfusn_alpha, exp).reshape(tuple([-1] + [1]*(len(y.shape) - 1)) )
+            y = y*torch.sqrt(alpha_p) + torch.sqrt(1-alpha_p)*torch.randn_like(y)
         
         if self.opt_flow is not None: return x.float(), y.float(), opt_flow_
         else: return x.float(), y.float()

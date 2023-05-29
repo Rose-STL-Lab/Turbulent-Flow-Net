@@ -1,0 +1,8 @@
+,Generation Step,Generation Model,Trial Index,Trial Status,Arm Parameterizations
+0,0,Sobol,0,COMPLETED,"{'0_0': {'dfusn_alpha': 0.89, 'wt_decay': 0.0}}"
+1,0,Sobol,1,COMPLETED,"{'1_0': {'dfusn_alpha': 0.9, 'wt_decay': 0.0}}"
+2,0,Sobol,2,COMPLETED,"{'2_0': {'dfusn_alpha': 0.78, 'wt_decay': 0.0}}"
+3,0,Sobol,3,COMPLETED,"{'3_0': {'dfusn_alpha': 0.94, 'wt_decay': 0.0}}"
+4,0,Sobol,4,COMPLETED,"{'4_0': {'dfusn_alpha': 0.72, 'wt_decay': 0.0}}"
+5,1,GPEI,5,COMPLETED,"{'5_0': {'dfusn_alpha': 0.97, 'wt_decay': 0.0}}"
+6,1,GPEI,6,COMPLETED,"{'6_0': {'dfusn_alpha': 0.99, 'wt_decay': 0.0}}"

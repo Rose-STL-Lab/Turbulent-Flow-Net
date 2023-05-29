@@ -144,7 +144,7 @@ else:
     outln_rate = 0
     args.outln_init = args.output_length
     
-valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_prep, stack_x=True, test_mode_train=test_mode_train)
+valid_set = Dataset(valid_indices, input_length + time_range - 1, 40, 6, data_prep, stack_x=True, test_mode_train=test_mode_train, args=args, _type='val')
 valid_loader = data.DataLoader(valid_set, batch_size = batch_size, shuffle = False, num_workers = args.num_workers)
 
 loss_fun = torch.nn.MSELoss()
@@ -213,7 +213,7 @@ for i in range(args.epoch):
 
     if i <= args.outln_steps:    
         output_length = min(int(outln_rate * i)*args.outln_stride + args.outln_init , args.output_length)
-        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, stack_x=True, test_mode_train=test_mode_train, noise=args.noise, do_not_scale_noise = args.dnsn, opt_flow=opt_flow)
+        train_set = Dataset(train_indices, input_length + time_range - 1, 40, output_length, data_prep, stack_x=True, test_mode_train=test_mode_train, noise=args.noise, do_not_scale_noise = args.dnsn, opt_flow=opt_flow, args=args, _type='train')
         train_loader = data.DataLoader(train_set, batch_size = batch_size, shuffle = True, num_workers = args.num_workers)
 
     ic_print(output_length)
@@ -271,7 +271,7 @@ suffix = f"{args.version}{'' if args.use_test_mode else '_64'}{'_mixed' if args.
 
 # on train set
 print("Testing on Train set")
-test_set = Dataset(train_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train)
+test_set = Dataset(train_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train,args=args,_type='test')
 test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = 8)
 preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
 
@@ -282,7 +282,7 @@ for i, lc in enumerate(loss_curve):
 
 # on val set
 print("Testing on Val set")
-test_set = Dataset(valid_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train)
+test_set = Dataset(valid_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train,args=args,_type='test')
 test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = args.num_workers)
 preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
 
@@ -294,7 +294,7 @@ for i, lc in enumerate(loss_curve):
 # On test set
 if not args.only_val:
     print("Testing on Test set")
-    test_set = Dataset(test_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train)
+    test_set = Dataset(test_indices, input_length + time_range - 1, 40, 60, data_prep, stack_x=True, test_mode=args.use_test_mode, test_mode_train=test_mode_train,args=args,_type='test')
     test_loader = data.DataLoader(test_set, batch_size = batch_size, shuffle = False, num_workers = args.num_workers)
     preds, trues, loss_curve = test_epoch(args, test_loader, best_model, loss_fun,test_mode=not test_mode_train and args.use_test_mode,device=device)
 
