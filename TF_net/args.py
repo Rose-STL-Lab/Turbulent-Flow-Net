@@ -259,7 +259,13 @@ def parse_arguments(args=None):
     # loss decay
     parser.add_argument("--beta",
                         type=float,
-                        help="the output length at which a 'max_loss' param is recorded and all the future values higher that that are ignored.",
+                        help="beta**t loss is used",
+                        default=1)
+    
+    # diffusion decay
+    parser.add_argument("--dfusn_alpha",
+                        type=float,
+                        help="output is diffused by N(sqrt(alpha^t)y, (1-alpha^t) I)",
                         default=1)
     
     # gmm params
