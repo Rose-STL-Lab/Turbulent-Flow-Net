@@ -66,7 +66,7 @@ def parse_arguments(args=None):
                         default=False)
     parser.add_argument("--num_workers",
                         type=int,
-                        default=8)
+                        default=2)
     parser.add_argument("--mixed_indx", 
                         action='store_true', 
                         help="mix val and test indexes. Currently, only supported for data* datasets",
@@ -244,7 +244,11 @@ def parse_arguments(args=None):
     parser.add_argument("--pos_emb_dim",
                         default=0,
                         type=int,
-                        help="use positional embedding for time, with provided dim")
+                        help="use positional embedding for time, with provided dim")    # time_emb_dim = pos_emb_dim*4
+    parser.add_argument("--inp_only",
+                        action="store_true",
+                        help="only add positional embedding at input",
+                        default = False)
     
     # truncate loss idea
     parser.add_argument("--trunc",

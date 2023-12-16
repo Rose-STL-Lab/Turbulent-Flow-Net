@@ -7,6 +7,7 @@ import pandas as pd
 # from positional_encodings.torch_encodings import PositionalEncoding1D
 from torch.utils import data
 import math
+from einops import rearrange, repeat
 
 # def get_time_emb_backbone(tstep, xx_len, test_mode, w=64, h=64):
 #     inp_len = xx_len // 2
@@ -57,7 +58,8 @@ class TimeEmbMLP(nn.Module):
     
     def forward(self, x, time_emb):
         time_emb = self.mlp(time_emb)
-        time_emb = time_emb[..., None, None]
+        if len(x.shape) - len(time_emb.shape) == 2:
+            time_emb = time_emb[..., None, None]
         scale_shift = time_emb.chunk(2, dim = 1)
         scale, shift = scale_shift
         x = x * (scale + 1) + shift
@@ -138,7 +140,7 @@ class Encoder(nn.Module):
 
 
 class LES(nn.Module):
-    def __init__(self, input_channels, output_channels, kernel_size, dropout_rate, time_range, addon_enc=False, addon_dec=False, time_emb_dim=0):
+    def __init__(self, input_channels, output_channels, kernel_size, dropout_rate, time_range, addon_enc=False, addon_dec=False, time_emb_dim=0, inp_only=False):
         super(LES, self).__init__()
         self.spatial_filter = nn.Conv2d(1, 1, kernel_size = 3, padding = 1, bias = False)   
         self.temporal_filter = nn.Conv2d(time_range, 1, kernel_size = 1, padding = 0, bias = False)
@@ -146,6 +148,7 @@ class LES(nn.Module):
         self.time_range = time_range
 
         self.time_emb_dim = time_emb_dim
+        self.inp_only = inp_only
         if time_emb_dim:
             self.time_emb_backbone = nn.Sequential(
                 LearnedSinusoidalPosEmb(time_emb_dim),
@@ -154,19 +157,23 @@ class LES(nn.Module):
                 nn.Linear(time_emb_dim*4, time_emb_dim*4)
             )
             
-            time_emb_dim*=4
+            time_emb_dim*=4     # Note, thus time_emb_dim = pos_emb_dim*4
             self.time_emb_dim = time_emb_dim
 
-            self.time_emb_mlp0 = TimeEmbMLP(time_emb_dim, 32)
-            self.time_emb_mlp1 = TimeEmbMLP(time_emb_dim, 64)
-            self.time_emb_mlp2 = TimeEmbMLP(time_emb_dim, 128)
-            self.time_emb_mlp3 = TimeEmbMLP(time_emb_dim, 256)
+            if inp_only:
+                self.time_emb_inp_mlp = TimeEmbMLP(time_emb_dim, 64*64)
+                
+            else:
+                self.time_emb_mlp0 = TimeEmbMLP(time_emb_dim, 32)
+                self.time_emb_mlp1 = TimeEmbMLP(time_emb_dim, 64)
+                self.time_emb_mlp2 = TimeEmbMLP(time_emb_dim, 128)
+                self.time_emb_mlp3 = TimeEmbMLP(time_emb_dim, 256)
         else:
             self.time_emb_backbone = None
         
-        self.encoder1 = Encoder(input_channels, kernel_size, dropout_rate, addon_enc, time_emb_dim)
-        self.encoder2 = Encoder(input_channels, kernel_size, dropout_rate, addon_enc, time_emb_dim)
-        self.encoder3 = Encoder(input_channels, kernel_size, dropout_rate, addon_enc, time_emb_dim)
+        self.encoder1 = Encoder(input_channels, kernel_size, dropout_rate, addon_enc, time_emb_dim if not inp_only else 0)
+        self.encoder2 = Encoder(input_channels, kernel_size, dropout_rate, addon_enc, time_emb_dim if not inp_only else 0)
+        self.encoder3 = Encoder(input_channels, kernel_size, dropout_rate, addon_enc, time_emb_dim if not inp_only else 0)
 
         self.addon_dec = addon_dec
         
@@ -182,8 +189,25 @@ class LES(nn.Module):
         
     def forward(self, xx, test_mode=False, tstep=None):
         #print("shape:",xx.shape)
-        xx_len = xx.shape[1]
 
+        assert (self.time_emb_dim > 0) == (tstep is not None)
+        if self.time_emb_dim:
+            if self.inp_only:
+                xx = rearrange(xx, 'b c h (w m) -> (b m) c h w', m=7) if test_mode else xx
+                b,c,h,w = xx.shape
+                xx = rearrange(xx, 'b c h w -> (b c) (h w)')
+                values = torch.tensor([tstep - (c - i) for i in range(c)]).repeat(b).reshape((-1,)).to(xx.device) # [batch, seq_len]
+                time_emb = self.time_emb_backbone(values)   # [batch, seq_len, time_emb_dim]
+                xx = self.time_emb_inp_mlp(xx, time_emb)    # [batch, seq_len, 64 * 64]
+                xx = rearrange(xx, '(b c) (h w) -> b c h w', b=b, h=h)
+                xx = rearrange(xx,  '(b m) c h w -> b c h (w m)', m=7) if test_mode else xx
+                time_emb = None
+            else:
+                time_emb = self.time_emb_backbone(torch.tensor([tstep for _ in range(xx.shape[0])]).to(xx.device))
+        else:
+            time_emb=None
+
+        xx_len = xx.shape[1]
         width = 64 if not test_mode else 64*7
         # u = u_mean + u_tilde + u_prime
         u_tilde = self.spatial_filter(xx.reshape(xx.shape[0]*xx.shape[1], 1, 64, width)).reshape(xx.shape[0], xx.shape[1], 64, width)
@@ -204,30 +228,24 @@ class LES(nn.Module):
         #xxxx = 1
         #assert xxxx > 10,"stop"
 
-        assert (self.time_emb_dim > 0) == (tstep is not None)
-        if self.time_emb_dim:
-            time_emb = self.time_emb_backbone(torch.tensor([tstep for _ in range(xx.shape[0])]).to(xx.device))
-        else:
-            time_emb=None
-
         out_conv1_mean, out_conv2_mean, out_conv3_mean, out_conv4_mean = self.encoder1(u_mean, time_emb)
         out_conv1_tilde, out_conv2_tilde, out_conv3_tilde, out_conv4_tilde = self.encoder2(u_tilde, time_emb)
         out_conv1_prime, out_conv2_prime, out_conv3_prime, out_conv4_prime = self.encoder3(u_prime, time_emb)
         
         out_deconv3 = self.deconv3(out_conv4_mean + out_conv4_tilde + out_conv4_prime)
         if self.addon_dec>=1: out_deconv3 = self.deconv32(out_deconv3)
-        if self.time_emb_dim: out_deconv3 = self.time_emb_mlp3(out_deconv3, time_emb)
+        if self.time_emb_dim and not self.inp_only: out_deconv3 = self.time_emb_mlp3(out_deconv3, time_emb)
 
         out_deconv2 = self.deconv2(out_conv3_mean + out_conv3_tilde + out_conv3_prime + out_deconv3)
         if self.addon_dec>=2: out_deconv2 = self.deconv21(out_deconv2)
-        if self.time_emb_dim: out_deconv2 = self.time_emb_mlp2(out_deconv2, time_emb)
+        if self.time_emb_dim and not self.inp_only: out_deconv2 = self.time_emb_mlp2(out_deconv2, time_emb)
 
         out_deconv1 = self.deconv1(out_conv2_mean + out_conv2_tilde + out_conv2_prime + out_deconv2)
         if self.addon_dec>=3: out_deconv1 = self.deconv10(out_deconv1)
-        if self.time_emb_dim: out_deconv1 = self.time_emb_mlp1(out_deconv1, time_emb)
+        if self.time_emb_dim and not self.inp_only: out_deconv1 = self.time_emb_mlp1(out_deconv1, time_emb)
 
         out_deconv0 = self.deconv0(out_conv1_mean + out_conv1_tilde + out_conv1_prime + out_deconv1)
-        if self.time_emb_dim: out_deconv0 = self.time_emb_mlp0(out_deconv0, time_emb)
+        if self.time_emb_dim and not self.inp_only: out_deconv0 = self.time_emb_mlp0(out_deconv0, time_emb)
 
         concat0 = torch.cat((xx[:,(xx_len - self.input_channels):], out_deconv0), 1)
         out = self.output_layer(concat0)

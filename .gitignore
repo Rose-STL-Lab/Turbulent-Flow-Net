@@ -9,3 +9,7 @@ data20_101*.pt
 .aim/
 .aim_legacy
 .vscode
+figs/
+assets*/
+scripts/bayesian_opt/tfnet_*/
+scripts/bayesian_opt/log.txt

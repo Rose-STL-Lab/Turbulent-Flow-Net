@@ -21,6 +21,7 @@ warnings.filterwarnings("ignore")
 import argparse
 from icecream import ic as ic_print
 from args import parse_arguments
+# import aimstack.base as aim
 import aim
 import os
 
@@ -41,9 +42,6 @@ assert not args.mixed_indx_no_overlap or args.epoch == 0
 assert not args.version or args.epoch == 0
 
 #aim run
-run = aim.Run(experiment=args.data)
-run['args'] = vars(args)
-
 run = aim.Run(experiment=args.data)
 run['args'] = vars(args)
 run.description = args.desc
@@ -128,7 +126,7 @@ else:
     test_indices = list(range(7700, 9800))
 
 model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, dropout_rate = dropout_rate,
-            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, time_emb_dim= args.pos_emb_dim).to(device)
+            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, time_emb_dim= args.pos_emb_dim, inp_only=args.inp_only).to(device)
 model = nn.DataParallel(model, device_ids=device_ids)
 
 num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -255,7 +253,7 @@ elif len(args.d_ids) >= 4:
     batch_size = 12
 
 model = LES(input_channels = input_length*2, output_channels = 2, kernel_size = kernel_size, dropout_rate = dropout_rate,
-            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, time_emb_dim= args.pos_emb_dim).to(device)
+            time_range = time_range, addon_enc=args.addon_enc, addon_dec=args.addon_dec, time_emb_dim= args.pos_emb_dim, inp_only=args.inp_only).to(device)
 # Note: saved_model is already in eval model, 
 # this kind of trick is needed because the torch.save() stores the class file location.
 # So some models use model addon file others use model file. But model.py simply imports from model_addon.py only

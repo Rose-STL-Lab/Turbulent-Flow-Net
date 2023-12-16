@@ -1,5 +1,4 @@
 import torch
-import kornia
 import numpy as np
 #import radialProfile
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

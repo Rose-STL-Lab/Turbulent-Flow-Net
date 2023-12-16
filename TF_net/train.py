@@ -12,12 +12,15 @@ import random
 import time
 from torch.autograd import Variable
 import warnings
-import kornia
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
 from collections import deque
 import cv2 as cv
 from sklearn.mixture import GaussianMixture
+
+def print_time_taken(prev_time, text):
+    # print(text, "Time taken: ", round(time.time()-prev_time, 5), "s", flush=True)
+    return time.time()
 
 class EMA:
     def __init__(self, _max = 5) -> None:
@@ -241,7 +244,9 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
     training_data = tqdm(train_loader)
     gmm = None
     gmm_train_batch = lambda x: (x==0)
+    prev_time = print_time_taken(0, "Starting training epoch")
     for batch_idx, batch_data in enumerate(training_data):
+        prev_time = print_time_taken(prev_time, "batch start")
         if args.mask and args.mtype=='opt':
             xx, yy, opt_flow = batch_data
             opt_flow = opt_flow.transpose(0,1)
@@ -320,6 +325,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
             ims.append(im.cpu().data.numpy())
             
             prev_lya = lya_val
+        prev_time = print_time_taken(prev_time, "auto_regressive end")
         if (args.gmm_comp > 0) and gmm_train_batch(batch_idx):
             gmm = GMM(torch.stack(pred_losses), args.gmm_comp, means_init = None if gmm is None else gmm.means_, \
                       ignore_min2=args.ignore_min2 if epoch > args.ignore_min2_epoch else False)
@@ -332,6 +338,7 @@ def train_epoch(args, train_loader, model, optimizer, loss_function, m_pred= Non
         if args.norm_loss:
             loss = loss/length
         loss.backward()
+        prev_time = print_time_taken(prev_time, "backward end")
         optimizer.step()
         if coef2 != 0:
             if log_c + relu_c > 0:

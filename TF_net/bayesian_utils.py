@@ -188,35 +188,42 @@ def evaluate_gmm(params, data):
 #========================================Lyapunov Exp===================================================================
 
 # Ref: https://ax.dev/api/_modules/ax/service/ax_client.html#AxClient.create_experiment
-lyapunov_experiment = {
+lyapunov_beta_experiment = {
     'name':"Lyapunov",
     'parameters':[
         {
-            "name": "gmm_comp",
-            "type": "range",
-            "bounds": [4, 7],
+            "name": "outln",
+            "type": "choice",
+            "values": [4, 6, 8],
             "value_type": "int",  # Optional, defaults to inference from type of "bounds".
-            "is_ordered": False,
+            "is_ordered": True,
         },
         {
-            "name": "lr",
+            "name": "m_val",
             "type": "range",
-            "bounds": [5e-4, 2e-3],
+            "bounds": [0.0, 0.6],
             "value_type": "float",  # Optional, defaults to inference from type of "bounds".
             "log_scale": False,  # Optional, defaults to False.
         },
         {
-            "name": "gamma",
+            "name": "beta",
             "type": "range",
-            "bounds": [0.9, 0.96],
+            "bounds": [0.4, 0.9],
             "value_type": "float",  # Optional, defaults to inference from type of "bounds".
             "log_scale": False,  # Optional, defaults to False.
+        },
+        {
+            "name": "pos_emb_dim",
+            "type": "choice",
+            "values": list(range(4,128,16)),
+            "value_type": "int",  # Optional, defaults to inference from type of "bounds".
+            "is_ordered": True,
         },
     ],
     'objectives':{"mse": ObjectiveProperties(minimize=True)}  # This mse is just a reference name to return outputs to.
 }
 
-def evaluate_lyapunov(params, data, max_mse=4.0):
+def evaluate_lyapunov_beta_inp_only(params, data, max_mse=4.0):
     # Generate Results
     print(f"Running with params: {params}")
     params['m_val'] = round(params['m_val'], 4)
@@ -224,15 +231,18 @@ def evaluate_lyapunov(params, data, max_mse=4.0):
     coef2=1
     server="north"
     slope=150
-    if params['m_learnt']:
-        m_str_name='m_learnt'
-        m_str_args=f"--m_init {params['m_val']}"
-    else:
-        m_str_name='m'
-        m_str_args=f"--mide {params['m_val']}"
+    outln=params['outln']
+    pos_emb_dim=params['pos_emb_dim']
+    beta=round(params['beta'], 4)
+    inp_only="--inp_only"
+    name_inp_only="inp_only_6464"
+    m_str_name='m_learnt'
+    m_str_args=f"--m_init {params['m_val']}"
+    # m_str_name='m'
+    # m_str_args=f"--mide {params['m_val']}"
     seed_arr=( "19","43","17","41")
-    d_id_arr=( "1","2","3","4" )
-    name=f"{server}_lya_{data}_coef2_{coef2}_{m_str_name}_{params['m_val']}_s_{slope}"
+    d_id_arr=( "3","3","4","4" )
+    name=f"{server}_lya_{data}_coef2_{coef2}_{m_str_name}_{params['m_val']}_outln_{outln}_beta_{beta}_pos_emb_{pos_emb_dim}{name_inp_only}"
 
     ps=[]
     for seed, d_id in zip(seed_arr, d_id_arr):
@@ -240,7 +250,7 @@ def evaluate_lyapunov(params, data, max_mse=4.0):
         folder=f"{name}/{name}_{seed}"
         print(f"folder:{folder}, seed: {seed}", flush=True)
         os.makedirs(f"results/{folder}", exist_ok=True)
-        cmd = f"(python TF_net/run_model.py --coef2 {coef2} --desc {name} --slope {slope} {m_str_args} --data {data}.pt --seed {seed} --d_ids {d_id} \
+        cmd = f"(python TF_net/run_model.py  --pos_emb_dim {pos_emb_dim} --output_length {outln} --beta {beta} --coef2 {coef2} --desc {name} --slope {slope} {m_str_args} {inp_only} --data {data}.pt --seed {seed} --d_ids {d_id} \
                         --path results/{folder}/ 2>&1 | tee results/{folder}/log.txt)"
         ps.append(subprocess.Popen(cmd, shell=True, close_fds=True, executable="/bin/bash"))
     for i,p in enumerate(ps):
