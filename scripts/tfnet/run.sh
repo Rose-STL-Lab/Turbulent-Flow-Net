@@ -3,7 +3,7 @@
 conda activate tfnet
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 coef2=0
-version='_2'
+version=''
 
 array=( "19" "43" "17" "41" )
 array2=( "0" "0" "1" "1" )
