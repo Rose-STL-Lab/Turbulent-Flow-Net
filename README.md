@@ -2,7 +2,7 @@
 ## Paper: 
 Rui Wang, Karthik Kashinath, Mustafa Mustafa, Adrian Albert, Rose Yu [Towards Physics-informed Deep Learning for Turbulent Flow Prediction](https://ucsdml.github.io/jekyll/update/2020/08/23/TF-Net.html), KDD 2020
 
-## [DataSet](https://roselab1.ucsd.edu/seafile/d/0d2aa58e608344238409/)
+## [DataSet](https://s3-west.nrp-nautilus.io/tfnet/rbc_data.pt)
 2000 velocity fields (![formula](https://render.githubusercontent.com/render/math?math=2000\times2\times256\times1792))
 
 ### Abstract:
@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 ## Instructions
 ### Dataset and Preprocessing
-- Download rbc_data.pt from [seafile](https://roselab1.ucsd.edu/seafile/d/0d2aa58e608344238409/)
+- Download rbc_data.pt from [Nautilus](https://s3-west.nrp-nautilus.io/tfnet/rbc_data.pt)
 
 - run data_prep.py to preprocess the raw data and all samples will be saved in the "rbc_data" folder
 ```
